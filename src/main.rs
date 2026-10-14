@@ -16,11 +16,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for packet in cap.iter(mc::Codec) {
         let packet = packet?;
         let headers = packet.headers()?;
+        let payload = headers.payload;
 
         if let Some(Tcp(header)) = headers.transport {
             println!("---------------------------------------------");
             println!("|\t{}", if header.destination_port == 25565 { "serverbound" } else { "clientbound" });
             println!("{header:?}");
+            println!("{:?}", payload.slice());
         }
     }
 

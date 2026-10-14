@@ -1,4 +1,4 @@
-use etherparse::{PacketHeaders, err::packet::SliceError};
+use etherparse::{PacketHeaders, PayloadSlice, err::packet::SliceError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Packet {
