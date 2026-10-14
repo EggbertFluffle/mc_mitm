@@ -2,6 +2,8 @@ use etherparse::{PacketHeaders, err::packet::SliceError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Packet {
+    // Can likely switch this to a reference as long 
+    // as we drop the reference after each loop iteration
     pub raw: Box<[u8]>
 }
 
