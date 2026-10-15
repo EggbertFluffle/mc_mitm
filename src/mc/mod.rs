@@ -3,10 +3,17 @@ use etherparse::{PacketHeaders, err::packet::SliceError};
 mod types;
 pub mod handshake;
 
-pub trait Decode {
-    fn decode(bytes: &mut &[u8]) -> Result<Self, String> where Self: Sized;
+#[derive(Debug, PartialEq, Eq)]
+pub enum DecodeError {
+    MalformedBytes,
+    PrematureByteEnd
 }
 
+pub trait Decode {
+    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> where Self: Sized;
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum ProtocolState {
     Handshaking,
     Status,
