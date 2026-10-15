@@ -28,12 +28,11 @@ pub type Bool = bool;
 
 impl Decode for Bool {
     fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
-        match bytes.get(0) {
-            None => Err(DecodeError::PrematureByteEnd),
-            Some(b) => {
-                *bytes = &bytes[1..];
-                Ok(*b != 0)
-            }
+        if let Some(b) = bytes.get(0) {
+            *bytes = &bytes[1..];
+            Ok(*b != 0)
+        } else {
+            Err(DecodeError::PrematureByteEnd)
         }
     }
 }
@@ -42,12 +41,11 @@ pub type Byte = i8;
 
 impl Decode for Byte {
     fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
-        match bytes.get(0) {
-            None => Err(DecodeError::PrematureByteEnd),
-            Some(b) => {
-                *bytes = &bytes[1..];
-                Ok(*b as i8) // TODO: Double check this reinterprets the byte
-            }
+        if let Some(b) = bytes.get(0) {
+            *bytes = &bytes[1..];
+            Ok(*b as i8) // TODO: Double check this reinterprets the byte
+        } else {
+            Err(DecodeError::PrematureByteEnd)
         }
     }
 }
@@ -56,12 +54,28 @@ pub type UnsignedByte = u8;
 
 impl Decode for UnsignedByte {
     fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
-        match bytes.get(0) {
-            None => Err(DecodeError::PrematureByteEnd),
-            Some(b) => {
-                *bytes = &bytes[1..];
-                Ok(*b)
+        if let Some(b) = bytes.get(0) {
+            *bytes = &bytes[1..];
+            Ok(*b)
+        } else {
+            Err(DecodeError::PrematureByteEnd)
+        }
+    }
+}
+
+pub type Short = i16;
+
+impl Decode for Short {
+    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
+        if let Some(b) = bytes.get(0..2) {
+            if let Ok(b) = b.try_into() {
+                *bytes = &bytes[2..];
+                return Ok(i16::from_be_bytes(b));
             }
+
+            Err(DecodeError::PrematureByteEnd)
+        } else {
+            Err(DecodeError::PrematureByteEnd)
         }
     }
 }
