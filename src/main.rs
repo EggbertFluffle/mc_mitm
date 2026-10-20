@@ -1,8 +1,4 @@
-use etherparse::{ TransportHeader::{ Tcp } };
-
 use pcap::{Capture, Device};
-
-use crate::mc::Decode;
 
 mod mc;
 
@@ -15,23 +11,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     cap.filter("tcp port 25565 and tcp[tcpflags] & tcp-push != 0", true)?;
 
-    let protocol_state = mc::ProtocolState::Handshaking;
+    let mut protocol_parser = mc::ProtocolParser{ phase: mc::Phase::Handshake };
 
-    for packet in cap.iter(mc::Codec) {
-        let packet = packet?;
-        let headers = packet.headers()?;
-        let payload = headers.payload;
-        let mut payload = payload.slice();
+    for raw_packet in cap.iter(mc::Codec) {
+        let raw_packet = raw_packet?;
 
-        if let Some(Tcp(header)) = headers.transport {
-            let bytes = &mut payload;
-
-            println!("Before handling: {}", bytes.len());
-            let handshake = mc::handshake::Handshake::decode(bytes);
-            println!("After handling: {}", bytes.len());
-
-            println!("{handshake:?}");
-        }
+        let packet = protocol_parser.parse_packet(raw_packet).unwrap();
+        println!("{packet:?}");
     }
 
     Ok(())

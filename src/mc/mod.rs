@@ -1,5 +1,7 @@
 use etherparse::{PacketHeaders, err::packet::SliceError};
 
+use types::{ VarInt };
+
 mod types;
 pub mod handshake;
 
@@ -9,38 +11,113 @@ pub enum DecodeError {
     PrematureByteEnd
 }
 
+// Types that "consume" parts of a packet as they are parsed
+// They should do this by modifying the reference to the bytes slice
 pub trait Decode {
     fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> where Self: Sized;
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum ProtocolState {
-    Handshaking,
+pub trait Parse {
+    fn parse(
+        bytes: &mut &[u8],
+        direction: Direction,
+        id: VarInt
+    ) -> Result<PhasePayload, DecodeError>;
+}
+
+// 5 Phases of the protocol
+// Dictate how pcaket IDs and directions are interpreted
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Phase {
+    Handshake,
     Status,
     Login,
     Configuration,
     Play
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PacketCapture {
-    pub raw: Box<[u8]>
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction { Serverbound, Clientbound }
+
+#[derive(Debug)]
+pub struct Packet {
+    pub length: VarInt,
+    pub id: VarInt,
+    pub direction: Direction,
+    pub phase: Phase,
+    pub payload: PhasePayload
 }
 
-impl PacketCapture {
+#[derive(Debug, Clone)]
+pub struct ProtocolParser {
+    pub phase: Phase
+}
+
+impl ProtocolParser {
+    pub fn parse_packet(&mut self, raw_packet: RawPacket) -> Result<Packet, DecodeError> {
+        use etherparse::TransportHeader::Tcp;
+        use Phase::*;
+        use Direction::{ Serverbound, Clientbound };
+
+        // Use etherparse to get packet headers and data start
+        let headers = raw_packet.headers().map_err(|_| { DecodeError::PrematureByteEnd })?;
+        let mut bytes = &mut headers.payload.slice();
+
+        // Parse and consume length and id from packet bytes
+        let length = VarInt::decode(&mut bytes)?;
+        let id = VarInt::decode(&mut bytes)?;
+
+        let direction = if let Some(Tcp(tcp_header)) = headers.transport {
+            // TODO: Don't use magic number
+            if tcp_header.destination_port == 25565 { Serverbound } else { Clientbound }
+        } else { panic!("Received packet without TCP headers") };
+
+
+        let packet = Packet { 
+            length,
+            id,
+            direction, 
+            phase: self.phase,
+            payload: match self.phase {
+                Handshake => handshake::Payload::parse(&mut bytes, direction, id)?,
+                _ => handshake::Payload::parse(&mut bytes, direction, id)?,
+            }
+        };
+
+        // Use this to change the state of the protocol parser
+        // This may not be a good approach since state changes may depend on packet contents
+        self.phase = match (self.phase, id.0) {
+            (Handshake, 0) => Status,
+            _ => self.phase
+        };
+
+        return Ok(packet);
+    }
+}
+
+#[derive(Debug)]
+pub enum PhasePayload {
+    Handshake(handshake::Payload),
+    Status(),
+    Login(),
+    Configuration(),
+    Play()
+}
+
+pub struct RawPacket(Box<[u8]>);
+
+impl RawPacket {
     pub fn headers<'a>(&'a self) -> Result<PacketHeaders<'a>, SliceError> {
-        PacketHeaders::from_ethernet_slice(&self.raw)
+        PacketHeaders::from_ethernet_slice(&self.0)
     }
 }
 
 pub struct Codec;
 
 impl pcap::PacketCodec for Codec {
-    type Item = PacketCapture;
+    type Item = RawPacket;
 
     fn decode(&mut self, packet: pcap::Packet<'_>) -> Self::Item {
-        PacketCapture {
-            raw: packet.data.into()
-        }
+        RawPacket(packet.data.into())
     }
 }
