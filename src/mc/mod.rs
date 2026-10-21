@@ -4,6 +4,8 @@ use types::{ VarInt };
 
 mod types;
 pub mod handshake;
+pub mod status;
+pub mod login;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DecodeError {
@@ -80,26 +82,40 @@ impl ProtocolParser {
             phase: self.phase,
             payload: match self.phase {
                 Handshake => handshake::Payload::parse(&mut bytes, direction, id)?,
+                Status => status::Payload::parse(&mut bytes, direction, id)?,
+                Login => login::Payload::parse(&mut bytes, direction, id)?,
                 _ => handshake::Payload::parse(&mut bytes, direction, id)?,
             }
         };
 
-        // Use this to change the state of the protocol parser
-        // This may not be a good approach since state changes may depend on packet contents
-        self.phase = match (self.phase, id.0) {
-            (Handshake, 0) => Status,
+        self.phase = match &packet.payload {
+            PhasePayload::Handshake(handshake::Payload::Intention { intent, .. }) => match intent.0 {
+                1 => Status,
+                2..=3 => Login,
+                _ => Err(DecodeError::MalformedBytes)?
+            },
+            PhasePayload::Status(status::Payload::PingResponse { .. }) => Handshake,
+            PhasePayload::Login(login::Payload::LoginAcknowledged { .. }) => Play,
             _ => self.phase
         };
 
-        return Ok(packet);
+        return match &packet.payload {
+            PhasePayload::Login(login::Payload::EncryptionRequest())
+                => panic!("Encryption is not supported"),
+            PhasePayload::Login(login::Payload::EncryptionResponse())
+                => panic!("Encryption is not supported"),
+            PhasePayload::Login(login::Payload::SetCompression{ .. })
+                => panic!("Encryption is not supported"),
+            _ => Ok(packet)
+        };
     }
 }
 
 #[derive(Debug)]
 pub enum PhasePayload {
     Handshake(handshake::Payload),
-    Status(),
-    Login(),
+    Status(status::Payload),
+    Login(login::Payload),
     Configuration(),
     Play()
 }

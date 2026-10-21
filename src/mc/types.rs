@@ -1,7 +1,7 @@
 use crate::mc::{ Decode, DecodeError };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(unused)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VarInt(pub i32);
 
 impl Decode for VarInt {
@@ -26,8 +26,8 @@ impl Decode for VarInt {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(unused)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VarLong(pub i64);
 
 impl Decode for VarLong {
@@ -197,6 +197,9 @@ impl Decode for String {
     fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
         let VarInt(length) = VarInt::decode(bytes)?;
 
+        println!("Remaining byte count: {}", bytes.len());
+        println!("Length of string: {length}");
+
         if let Some(b) = bytes.get(0..length as usize) {
             let s = String::from_utf8(b.to_vec())
                 .map_err(|_| { DecodeError::MalformedBytes })?;
@@ -205,5 +208,64 @@ impl Decode for String {
         }
 
         Err(DecodeError::PrematureByteEnd)
+    }
+}
+
+#[allow(unused)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct UUID(pub u128);
+
+impl Decode for UUID {
+    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
+        if let Some(b) = bytes.get(0..16) {
+            if let Ok(b) = b.try_into() {
+                *bytes = &bytes[16..];
+                return Ok(UUID(u128::from_be_bytes(b)));
+            }
+        }
+
+        Err(DecodeError::PrematureByteEnd)
+    }
+}
+
+#[allow(unused)]
+#[derive(Debug)]
+pub enum PrefixedOptional<T: Decode> {
+    PrefixedNone,
+    PrefixedSome(T)
+}
+
+impl<T: Decode> Decode for PrefixedOptional<T> {
+    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
+        use PrefixedOptional::*;
+
+        if let Some(b) = bytes.get(0) {
+            return match *b {
+                0 => Ok(PrefixedNone),
+                _ => {
+                    *bytes = &bytes[1..];
+                    Ok(PrefixedSome(T::decode(bytes)?))
+                }
+            }
+        }
+
+        Err(DecodeError::PrematureByteEnd)
+    }
+}
+
+#[allow(unused)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GameProfile {
+    uuid: UUID,
+    username: String,
+    // properties
+}
+
+impl Decode for GameProfile {
+    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
+        return Ok(GameProfile {
+            uuid: UUID::decode(bytes)?,
+            username: String::decode(bytes)?,
+        });
     }
 }

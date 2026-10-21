@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for raw_packet in cap.iter(mc::Codec) {
         let raw_packet = raw_packet?;
 
-        let packet = protocol_parser.parse_packet(raw_packet).unwrap();
+        let packet = protocol_parser.parse_packet(raw_packet);
         println!("{packet:?}");
     }
 
