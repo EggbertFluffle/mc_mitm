@@ -6,6 +6,8 @@ mod types;
 pub mod handshake;
 pub mod status;
 pub mod login;
+pub mod configuration;
+pub mod play;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DecodeError {
@@ -84,6 +86,7 @@ impl ProtocolParser {
                 Handshake => handshake::Payload::parse(&mut bytes, direction, id)?,
                 Status => status::Payload::parse(&mut bytes, direction, id)?,
                 Login => login::Payload::parse(&mut bytes, direction, id)?,
+                Configuration => configuration::Payload::parse(&mut bytes, direction, id)?,
                 _ => handshake::Payload::parse(&mut bytes, direction, id)?,
             }
         };
@@ -95,7 +98,8 @@ impl ProtocolParser {
                 _ => Err(DecodeError::MalformedBytes)?
             },
             PhasePayload::Status(status::Payload::PingResponse { .. }) => Handshake,
-            PhasePayload::Login(login::Payload::LoginAcknowledged { .. }) => Play,
+            PhasePayload::Login(login::Payload::LoginAcknowledged { .. }) => Configuration,
+            PhasePayload::Configuration(configuration::Payload::FinishConfigurationAcknowledge { .. }) => Play,
             _ => self.phase
         };
 
@@ -105,7 +109,7 @@ impl ProtocolParser {
             PhasePayload::Login(login::Payload::EncryptionResponse())
                 => panic!("Encryption is not supported"),
             PhasePayload::Login(login::Payload::SetCompression{ .. })
-                => panic!("Encryption is not supported"),
+                => panic!("Compression is not supported"),
             _ => Ok(packet)
         };
     }
@@ -116,8 +120,8 @@ pub enum PhasePayload {
     Handshake(handshake::Payload),
     Status(status::Payload),
     Login(login::Payload),
-    Configuration(),
-    Play()
+    Configuration(configuration::Payload),
+    Play(play::Payload)
 }
 
 pub struct RawPacket(Box<[u8]>);

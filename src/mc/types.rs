@@ -197,9 +197,6 @@ impl Decode for String {
     fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
         let VarInt(length) = VarInt::decode(bytes)?;
 
-        println!("Remaining byte count: {}", bytes.len());
-        println!("Length of string: {length}");
-
         if let Some(b) = bytes.get(0..length as usize) {
             let s = String::from_utf8(b.to_vec())
                 .map_err(|_| { DecodeError::MalformedBytes })?;

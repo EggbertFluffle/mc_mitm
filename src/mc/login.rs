@@ -7,7 +7,6 @@ pub enum Payload {
     LoginStart { name: String, uuid: UUID },
     EncryptionResponse(), // Cooked
     LoginAcknowledged(),
-    CookiedResponse { identifier: String }, // There is a payload here too
 
     // Clientbound packets
     Disconnect { reason: String }, // Actually a JSON Text Component, not String
