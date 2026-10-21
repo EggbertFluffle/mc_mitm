@@ -226,31 +226,6 @@ impl Decode for UUID {
 }
 
 #[allow(unused)]
-#[derive(Debug)]
-pub enum PrefixedOptional<T: Decode> {
-    PrefixedNone,
-    PrefixedSome(T)
-}
-
-impl<T: Decode> Decode for PrefixedOptional<T> {
-    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
-        use PrefixedOptional::*;
-
-        if let Some(b) = bytes.get(0) {
-            return match *b {
-                0 => Ok(PrefixedNone),
-                _ => {
-                    *bytes = &bytes[1..];
-                    Ok(PrefixedSome(T::decode(bytes)?))
-                }
-            }
-        }
-
-        Err(DecodeError::PrematureByteEnd)
-    }
-}
-
-#[allow(unused)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GameProfile {
     uuid: UUID,
@@ -266,3 +241,71 @@ impl Decode for GameProfile {
         });
     }
 }
+
+#[allow(unused)]
+pub type PrefixedOptional<T> = Option<T>;
+
+impl<T: Decode> Decode for PrefixedOptional<T> {
+    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
+        if let Some(b) = bytes.get(0) {
+            return match *b {
+                0 => Ok(None),
+                _ => {
+                    *bytes = &bytes[1..];
+                    Ok(Some(T::decode(bytes)?))
+                }
+            }
+        }
+
+        Err(DecodeError::PrematureByteEnd)
+    }
+}
+
+#[allow(unused)]
+pub type PrefixedArray<T> = Vec<T>;
+
+impl<T: Decode> Decode for PrefixedArray<T> {
+    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
+        let VarInt(length) = VarInt::decode(bytes)?;
+
+        let mut out: Vec<T> = Vec::new();
+        out.reserve_exact(length as usize);
+        for _ in 0..length as usize {
+            out.push(T::decode(bytes)?);
+        }
+        Ok(out)
+    }
+}
+
+#[allow(unused)]
+#[derive(Debug)]
+pub enum Either<L, R> {
+    Left(L),
+    Right(R)
+}
+
+impl<L: Decode, R: Decode> Decode for Either<L, R> {
+    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
+        Ok(if Bool::decode(bytes)? {
+            Either::Left(L::decode(bytes)?)
+        } else {
+            Either::Right(R::decode(bytes)?)
+        })
+    }
+}
+
+// Handles the parsing of compound, tuple types
+macro_rules! impl_decode_tuple {
+    ($($T:ident),+) => {
+        impl<$($T: Decode),+> Decode for ($($T,)+) {
+            fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
+                Ok(($($T::decode(bytes)?,)+))
+            }
+        }
+    };
+}
+
+impl_decode_tuple!(A);
+impl_decode_tuple!(A, B);
+impl_decode_tuple!(A, B, C);
+impl_decode_tuple!(A, B, C, D);
