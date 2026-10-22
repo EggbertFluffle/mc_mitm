@@ -23,6 +23,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Ok(packet) = protocol_parser.parse_packet(raw_packet) {
             println!("{packet:?}", )
         }
+
+        // let packet = protocol_parser.parse_packet(raw_packet);
+        // println!("{packet:?}");
     }
 
     Ok(())

@@ -143,6 +143,22 @@ impl Decode for Int {
 }
 
 #[allow(unused)]
+pub type UnsignedInt = u32;
+
+impl Decode for UnsignedInt {
+    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
+        if let Some(b) = bytes.get(0..4) {
+            if let Ok(b) = b.try_into() {
+                *bytes = &bytes[4..];
+                return Ok(u32::from_be_bytes(b));
+            }
+        }
+
+        Err(DecodeError::PrematureByteEnd)
+    }
+}
+
+#[allow(unused)]
 pub type Long = i64;
 
 impl Decode for Long {
@@ -151,6 +167,22 @@ impl Decode for Long {
             if let Ok(b) = b.try_into() {
                 *bytes = &bytes[8..];
                 return Ok(i64::from_be_bytes(b));
+            }
+        }
+
+        Err(DecodeError::PrematureByteEnd)
+    }
+}
+
+#[allow(unused)]
+pub type UnsignedLong = u64;
+
+impl Decode for UnsignedLong {
+    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
+        if let Some(b) = bytes.get(0..8) {
+            if let Ok(b) = b.try_into() {
+                *bytes = &bytes[8..];
+                return Ok(u64::from_be_bytes(b));
             }
         }
 
@@ -226,7 +258,7 @@ impl Decode for UUID {
 }
 
 #[allow(unused)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone)]
 pub struct GameProfile {
     uuid: UUID,
     username: String,
@@ -239,6 +271,68 @@ impl Decode for GameProfile {
             uuid: UUID::decode(bytes)?,
             username: String::decode(bytes)?,
         });
+    }
+}
+
+#[allow(unused)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct LpVec3 {
+    x: Double,
+    y: Double,
+    z: Double
+}
+
+impl Decode for LpVec3 {
+    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
+        const MAX_QUANTIZED_VALUE: f64 = 32766.0;
+        const CONTINUATION_FLAG: u8 = 0x04;
+        const SCALE_BITS: u64 = 0x03;
+
+        let byte1 = UnsignedByte::decode(bytes)?;
+        if byte1 == 0 {
+            return Ok(LpVec3 { x: 0.0, y: 0.0, z: 0.0 });
+        }
+
+        let byte2 = UnsignedByte::decode(bytes)?;
+        let bytes3_to6 = UnsignedInt::decode(bytes)?;
+
+        let packed: u64 = ((bytes3_to6 as u64) << 16) | ((byte2 as u64) << 8) | (byte1 as u64);
+
+        let mut scale_factor: u64 = (byte1 as u64) & SCALE_BITS;
+        if byte1 & CONTINUATION_FLAG != 0 {
+            let VarInt(b) = VarInt::decode(bytes)?;
+            scale_factor |= (b as u64) << 2;
+        }
+        let scale = scale_factor as f64;
+
+        let unpack = |value: u64| ((value & 32767) as f64).min(MAX_QUANTIZED_VALUE) * 2.0 / MAX_QUANTIZED_VALUE - 1.0;
+
+        println!("parsed the lpvec3");
+        Ok(LpVec3 {
+            x: unpack(packed >> 3) * scale,
+            y: unpack(packed >> 18) * scale,
+            z: unpack(packed >> 33) * scale,
+        })
+    }
+}
+
+#[allow(unused)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Position {
+    x: i32,
+    y: i32,
+    z: i32
+}
+
+impl Decode for Position {
+    fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
+        let val = Long::decode(bytes)?;
+
+        Ok(Position { 
+            x: (val >> 38) as i32,
+            y: ((val << 52) >> 52) as i32,
+            z: ((val << 26) >> 38) as i32
+        })
     }
 }
 

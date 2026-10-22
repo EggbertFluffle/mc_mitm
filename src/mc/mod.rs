@@ -87,8 +87,7 @@ impl ProtocolParser {
                 Status => status::Payload::parse(&mut bytes, direction, id)?,
                 Login => login::Payload::parse(&mut bytes, direction, id)?,
                 Configuration => configuration::Payload::parse(&mut bytes, direction, id)?,
-                Play => play::Payload::parse(&mut bytes, direction, id)?,
-                _ => handshake::Payload::parse(&mut bytes, direction, id)?,
+                Play => play::Payload::parse(&mut bytes, direction, id)?
             }
         };
 
