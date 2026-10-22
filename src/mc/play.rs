@@ -1,10 +1,25 @@
 use crate::mc::{ Decode, DecodeError, Direction, Parse, PhasePayload };
-use crate::mc::types::{ String, VarInt, GameProfile, UUID };
+use crate::mc::types::{ Double, String, UUID, UnsignedByte, VarInt };
 
 #[derive(Debug)]
 pub enum Payload {
     // Serverbound
     Attack { entity_id: VarInt }
+
+    // Clientbound
+    AddEntity {
+        id: VarInt,
+        uuid: UUID,
+        entity_type: VarInt,
+        x: Double,
+        y: Double,
+        z: Double,
+        velocity: LpVec3, // This is not correct
+        pitch: UnsignedByte,
+        yaw: UnsignedByte,
+        head_yaw: UnsignedByte,
+        data: VarInt
+    }
 }
 
 impl Parse for Payload {
