@@ -4,7 +4,7 @@ use crate::mc::types::{ Double, String, UUID, UnsignedByte, VarInt };
 #[derive(Debug)]
 pub enum Payload {
     // Serverbound
-    Attack { entity_id: VarInt }
+    Attack { entity_id: VarInt },
 
     // Clientbound
     AddEntity {
@@ -14,7 +14,7 @@ pub enum Payload {
         x: Double,
         y: Double,
         z: Double,
-        velocity: LpVec3, // This is not correct
+        // velocity: LpVec3, // This is not correct
         pitch: UnsignedByte,
         yaw: UnsignedByte,
         head_yaw: UnsignedByte,
