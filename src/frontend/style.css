@@ -1,0 +1,50 @@
+@font-face {
+    font-family: minecraft;
+    src: url(fonts/Minecraft.ttf);
+    font-weight: 400 700;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: 
+        linear-gradient(#00000080),
+        url(images/stone-texture.jpg);
+    backdrop-filter: blur(8px);
+    justify-content: center;
+    height: 100vh;
+
+    font-family: minecraft;
+}
+
+h1, h2 {
+    text-align: center;
+    color: white;
+    text-shadow: 2px 2px rgb(40, 40, 40);
+}
+
+h1 {
+    color: lightgray;
+    padding: 2rem;
+    font-size: 2.5rem;
+}
+
+h2 { font-size: 1.5rem; }
+
+section {
+    padding: 2rem 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+span {
+    padding: 4rem;
+    font-size: 2rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}

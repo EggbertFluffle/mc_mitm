@@ -1,9 +1,13 @@
 use pcap::{Capture, Device};
 
 mod mc;
+mod web;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // let device = Device::from("lo");
+const PORT: u16 = 3000;
+const TARGET_IP: &str = "18.42.101.96";
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let device = Device::lookup()?
         .ok_or("no device available")?;
     println!("Using device: {}", device.name);
@@ -31,6 +35,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // let packet = protocol_parser.parse_packet(raw_packet);
         // println!("{packet:?}");
     }
+
+    web::run(PORT).await;
 
     Ok(())
 }
