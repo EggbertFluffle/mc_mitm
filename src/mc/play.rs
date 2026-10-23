@@ -5,6 +5,8 @@ use crate::mc::types::*;
 pub enum Payload {
     // Serverbound
     Attack { entity_id: VarInt },
+    ClientTickEnd(),
+    KeepServerAlive { id: Long },
     PlayerPosition {
         x: Double,
         y: Double,
@@ -83,7 +85,34 @@ pub enum Payload {
         location: Position,
         id: VarInt
     },
-    EntityMetadata() // I ain't doin allat
+    ChunkBiomes(), // I ain't doin allat
+    KeepClientAlive { id: Long },
+    EntityPosition {
+        entity_id: VarInt,
+        properties: VarInt,
+    },
+    EntityPositionRotation {
+        entity_id: VarInt,
+        properties: VarInt,
+    },
+    RotateHead {
+        entity_id: VarInt,
+        head_yaw: UnsignedByte
+    },
+    EntityMetadata(), // I ain't doin allat
+    UpdateTime {
+        world_age: Long,
+        clocks: PrefixedArray<(VarInt, VarLong, Float, Float)>
+    },
+    SoundEffect { event: String,
+        category: VarInt,
+        x: Int,
+        y: Int,
+        z: Int,
+        volume: Float,
+        pitch: Float,
+        seed: Long 
+    }
 }
 
 impl Parse for Payload {
@@ -99,6 +128,8 @@ impl Parse for Payload {
 
         let payload = match (direction, id) {
             (Serverbound, 1) => Attack { entity_id: VarInt::decode(bytes)? },
+            (Serverbound, 13) => ClientTickEnd(),
+            (Serverbound, 28) => KeepServerAlive { id: Long::decode(bytes)? },
             (Serverbound, 30) => PlayerPosition {
                 x:              Double::decode(bytes)?,
                 y:              Double::decode(bytes)?,
@@ -146,18 +177,22 @@ impl Parse for Payload {
                 pitch:          Float::decode(bytes)?
             },
             (Clientbound, 0) => return Ok(parse_bundle(bytes)?),
-            (Clientbound, 1) => AddEntity { 
-                id:             VarInt::decode(bytes)?,
-                uuid:           UUID::decode(bytes)?,
-                entity_type:    VarInt::decode(bytes)?,
-                x:              Double::decode(bytes)?,
-                y:              Double::decode(bytes)?,
-                z:              Double::decode(bytes)?,
-                velocity:       LpVec3::decode(bytes)?,
-                pitch:          UnsignedByte::decode(bytes)?,
-                yaw:            UnsignedByte::decode(bytes)?,
-                head_yaw:       UnsignedByte::decode(bytes)?,
-                data:           VarInt::decode(bytes)?
+            (Clientbound, 1) => {
+                let add_entity = AddEntity { 
+                    id:             VarInt::decode(bytes)?,
+                    uuid:           UUID::decode(bytes)?,
+                    entity_type:    VarInt::decode(bytes)?,
+                    x:              Double::decode(bytes)?,
+                    y:              Double::decode(bytes)?,
+                    z:              Double::decode(bytes)?,
+                    velocity:       LpVec3::decode(bytes)?,
+                    pitch:          UnsignedByte::decode(bytes)?,
+                    yaw:            UnsignedByte::decode(bytes)?,
+                    head_yaw:       UnsignedByte::decode(bytes)?,
+                    data:           VarInt::decode(bytes)?
+                };
+
+                add_entity
             },
             (Clientbound, 2) => EntityAnimate { 
                 id:             VarInt::decode(bytes)?,
@@ -174,7 +209,39 @@ impl Parse for Payload {
                 location:       Position::decode(bytes)?,
                 id:             VarInt::decode(bytes)?
             },
-            _ => Err(DecodeError::MalformedBytes)?
+            (Clientbound, 13) => ChunkBiomes(),
+            (Clientbound, 45) => KeepClientAlive { id: Long::decode(bytes)? },
+            (Clientbound, 54) => EntityPosition {
+                entity_id: VarInt::decode(bytes)?,
+                properties: VarInt::decode(bytes)?
+            },
+            (Clientbound, 55) => EntityPositionRotation {
+                entity_id: VarInt::decode(bytes)?,
+                properties: VarInt::decode(bytes)?
+            },
+            (Clientbound, 85) => RotateHead {
+                entity_id: VarInt::decode(bytes)?,
+                head_yaw: UnsignedByte::decode(bytes)?
+            },
+            (Clientbound, 101) => EntityMetadata(),
+            (Clientbound, 115) => UpdateTime {
+                world_age: Long::decode(bytes)?,
+                clocks: PrefixedArray::<(VarInt, VarLong, Float, Float)>::decode(bytes)?
+            },
+            (Clientbound, 119) => SoundEffect {
+                event: String::decode(bytes)?,
+                category: VarInt::decode(bytes)?,
+                x: Int::decode(bytes)?,
+                y: Int::decode(bytes)?,
+                z: Int::decode(bytes)?,
+                volume: Float::decode(bytes)?,
+                pitch: Float::decode(bytes)?,
+                seed: Long::decode(bytes)?
+            },
+            _ => {
+                println!("Unable to handle packet id {}", id);
+                Err(DecodeError::MalformedBytes)?
+            }
         };
 
         Ok(vec![PhasePayload::Play(payload)])
@@ -202,11 +269,9 @@ fn parse_bundle(bytes: &mut &[u8]) -> Result<Vec<PhasePayload>, DecodeError> {
             return Ok(bundle);
         }
 
-        match Payload::parse(&mut frame, Direction::Clientbound, id) {
-            Ok(mut payloads) => bundle.append(&mut payloads),
-            Err(_) => {
-                println!("Skipping unimplemented packet id {}", id.0);
-            }
+
+        if let Ok(mut payloads) = Payload::parse(&mut frame, Direction::Clientbound, id) {
+            bundle.append(&mut payloads);
         }
     }
 }

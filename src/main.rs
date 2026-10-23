@@ -21,7 +21,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let raw_packet = raw_packet?;
 
         if let Ok(packet) = protocol_parser.parse_packet(raw_packet) {
-            println!("{:?}", packet.payload);
+            if let Some(payload) = packet.payload.get(0) {
+                if let mc::PhasePayload::Play(mc::play::Payload::ClientTickEnd()) = payload { } else {
+                    println!("{:?}", payload);
+                }
+            }
         }
 
         // let packet = protocol_parser.parse_packet(raw_packet);
