@@ -26,7 +26,7 @@ pub trait Parse {
         bytes: &mut &[u8],
         direction: Direction,
         id: VarInt
-    ) -> Result<PhasePayload, DecodeError>;
+    ) -> Result<Vec<PhasePayload>, DecodeError>;
 }
 
 // 5 Phases of the protocol
@@ -49,15 +49,27 @@ pub struct Packet {
     pub id: VarInt,
     pub direction: Direction,
     pub phase: Phase,
-    pub payload: PhasePayload
+    pub payload: Vec<PhasePayload>
 }
 
 #[derive(Debug, Clone)]
 pub struct ProtocolParser {
-    pub phase: Phase
+    pub phase: Phase,
+    pub clientbound_buf: Vec<u8>,
+    pub serverbound_buf: Vec<u8>
 }
 
 impl ProtocolParser {
+    pub fn new(init_phase: Phase) -> ProtocolParser {
+        ProtocolParser { 
+            phase: init_phase,
+            clientbound_buf: Vec::new(),
+            serverbound_buf: Vec::new() 
+        }
+    }
+
+    // parse_packet will return None if the packet was not complete and is expecting more bytes to
+    // complete the packet
     pub fn parse_packet(&mut self, raw_packet: RawPacket) -> Result<Packet, DecodeError> {
         use etherparse::TransportHeader::Tcp;
         use Phase::*;
@@ -91,27 +103,31 @@ impl ProtocolParser {
             }
         };
 
-        self.phase = match &packet.payload {
-            PhasePayload::Handshake(handshake::Payload::Intention { intent, .. }) => match intent.0 {
-                1 => Status,
-                2..=3 => Login,
-                _ => Err(DecodeError::MalformedBytes)?
-            },
-            PhasePayload::Status(status::Payload::PingResponse { .. }) => Handshake,
-            PhasePayload::Login(login::Payload::LoginAcknowledged { .. }) => Configuration,
-            PhasePayload::Configuration(configuration::Payload::FinishConfigurationAcknowledge { .. }) => Play,
-            _ => self.phase
-        };
+        if let Some(payload) = &packet.payload.get(0) {
+            self.phase = match payload {
+                PhasePayload::Handshake(handshake::Payload::Intention { intent, .. }) => match intent.0 {
+                    1 => Status,
+                    2..=3 => Login,
+                    _ => Err(DecodeError::MalformedBytes)?
+                },
+                PhasePayload::Status(status::Payload::PingResponse { .. }) => Handshake,
+                PhasePayload::Login(login::Payload::LoginAcknowledged { .. }) => Configuration,
+                PhasePayload::Configuration(configuration::Payload::FinishConfigurationAcknowledge { .. }) => Play,
+                _ => self.phase
+            };
 
-        return match &packet.payload {
-            PhasePayload::Login(login::Payload::EncryptionRequest())
-                => panic!("Encryption is not supported"),
-            PhasePayload::Login(login::Payload::EncryptionResponse())
-                => panic!("Encryption is not supported"),
-            PhasePayload::Login(login::Payload::SetCompression{ .. })
-                => panic!("Compression is not supported"),
-            _ => Ok(packet)
-        };
+            return match payload {
+                PhasePayload::Login(login::Payload::EncryptionRequest())
+                    => panic!("Encryption is not supported"),
+                PhasePayload::Login(login::Payload::EncryptionResponse())
+                    => panic!("Encryption is not supported"),
+                PhasePayload::Login(login::Payload::SetCompression{ .. })
+                    => panic!("Compression is not supported"),
+                _ => Ok(packet)
+            };
+        }
+        
+        Ok(packet)
     }
 }
 

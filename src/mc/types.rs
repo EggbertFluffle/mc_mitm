@@ -211,9 +211,9 @@ pub type Double = f64;
 
 impl Decode for Double {
     fn decode(bytes: &mut &[u8]) -> Result<Self, DecodeError> {
-        if let Some(b) = bytes.get(0..4) {
+        if let Some(b) = bytes.get(0..8) {
             if let Ok(b) = b.try_into() {
-                *bytes = &bytes[4..];
+                *bytes = &bytes[8..];
                 return Ok(f64::from_be_bytes(b));
             }
         }
@@ -307,7 +307,6 @@ impl Decode for LpVec3 {
 
         let unpack = |value: u64| ((value & 32767) as f64).min(MAX_QUANTIZED_VALUE) * 2.0 / MAX_QUANTIZED_VALUE - 1.0;
 
-        println!("parsed the lpvec3");
         Ok(LpVec3 {
             x: unpack(packed >> 3) * scale,
             y: unpack(packed >> 18) * scale,

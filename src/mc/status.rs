@@ -14,7 +14,7 @@ impl Parse for Payload {
         bytes: &mut &[u8],
         direction: Direction,
         id: VarInt
-    ) -> Result<PhasePayload, DecodeError> {
+    ) -> Result<Vec<PhasePayload>, DecodeError> {
         use Direction::{ Clientbound, Serverbound };
         use Payload::*;
 
@@ -28,6 +28,6 @@ impl Parse for Payload {
             _ => Err(DecodeError::MalformedBytes)?
         };
 
-        Ok(PhasePayload::Status(payload))
+        Ok(vec![PhasePayload::Status(payload)])
     }
 }
