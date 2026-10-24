@@ -55,16 +55,14 @@ pub struct Packet {
 #[derive(Debug, Clone)]
 pub struct ProtocolParser {
     pub phase: Phase,
-    pub clientbound_buf: Vec<u8>,
-    pub serverbound_buf: Vec<u8>
+    pub compression: Option<u32>
 }
 
 impl ProtocolParser {
     pub fn new(init_phase: Phase) -> ProtocolParser {
         ProtocolParser { 
             phase: init_phase,
-            clientbound_buf: Vec::new(),
-            serverbound_buf: Vec::new() 
+            compression: None
         }
     }
 
@@ -79,15 +77,14 @@ impl ProtocolParser {
         let headers = raw_packet.headers().map_err(|_| { DecodeError::PrematureByteEnd })?;
         let mut bytes = &mut headers.payload.slice();
 
-        // Parse and consume length and id from packet bytes
-        let length = VarInt::decode(&mut bytes)?;
-        let id = VarInt::decode(&mut bytes)?;
-
         let direction = if let Some(Tcp(tcp_header)) = headers.transport {
             // TODO: Don't use magic number
             if tcp_header.destination_port == 25565 { Serverbound } else { Clientbound }
         } else { panic!("Received packet without TCP headers") };
 
+        // Parse and consume length and id from packet bytes
+        let length = VarInt::decode(&mut bytes)?;
+        let id = VarInt::decode(&mut bytes)?;
 
         let packet = Packet { 
             length,
@@ -121,8 +118,13 @@ impl ProtocolParser {
                     => panic!("Encryption is not supported"),
                 PhasePayload::Login(login::Payload::EncryptionResponse())
                     => panic!("Encryption is not supported"),
-                PhasePayload::Login(login::Payload::SetCompression{ .. })
-                    => panic!("Compression is not supported"),
+                PhasePayload::Login(login::Payload::SetCompression { threshold }) => {
+                    if threshold.0 >= 0 {
+                        self.compression = Some(threshold.0 as u32);
+                    }
+
+                    Ok(packet)
+                }
                 _ => Ok(packet)
             };
         }
