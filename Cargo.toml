@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 etherparse = "0.21.0"
 pcap = "2.5.0"
+zlib-rs = "0.6.8"
