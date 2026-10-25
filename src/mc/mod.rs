@@ -84,19 +84,14 @@ impl ProtocolParser {
 
         let _ = VarInt::decode(&mut bytes)?; // Toss the length, we don't need that jawn
 
-        // Holds the decompressed (Packet ID + Data) if this packet is compressed.
-        // Declared out here so `bytes` can borrow from it for the rest of the function.
         let mut decompressed = Vec::new();
 
-        // Parse and consume the data length and id from packet bytes
         let id = if self.compression.is_some() {
             let VarInt(data_length) = VarInt::decode(&mut bytes)?;
 
             if data_length == 0 {
-                // Uncompressed: Packet ID + Data follow directly
                 VarInt::decode(&mut bytes)?
             } else {
-                // Compressed: Data Length is the uncompressed size of Packet ID + Data
                 let data_length = usize::try_from(data_length)
                     .map_err(|_| DecodeError::MalformedBytes)?;
 
