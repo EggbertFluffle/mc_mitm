@@ -333,6 +333,7 @@ dependencies = [
  "axum",
  "etherparse",
  "pcap",
+ "serde_json",
  "tokio",
  "tower-http",
 ]
