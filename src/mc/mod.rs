@@ -1,6 +1,7 @@
 use pcap::{Capture, Device};
 
 use etherparse::{PacketHeaders, err::packet::SliceError};
+use zlib_rs::{decompress_slice, InflateConfig};
 
 use types::{ VarInt };
 
@@ -47,7 +48,6 @@ pub enum Direction { Serverbound, Clientbound }
 
 #[derive(Debug)]
 pub struct Packet {
-    pub length: VarInt,
     pub id: VarInt,
     pub direction: Direction,
     pub phase: Phase,
@@ -57,16 +57,14 @@ pub struct Packet {
 #[derive(Debug, Clone)]
 pub struct ProtocolParser {
     pub phase: Phase,
-    pub clientbound_buf: Vec<u8>,
-    pub serverbound_buf: Vec<u8>
+    pub compression: Option<u32>
 }
 
 impl ProtocolParser {
     pub fn new(init_phase: Phase) -> ProtocolParser {
         ProtocolParser { 
             phase: init_phase,
-            clientbound_buf: Vec::new(),
-            serverbound_buf: Vec::new() 
+            compression: None
         }
     }
 
@@ -79,20 +77,49 @@ impl ProtocolParser {
 
         // Use etherparse to get packet headers and data start
         let headers = raw_packet.headers().map_err(|_| { DecodeError::PrematureByteEnd })?;
-        let mut bytes = &mut headers.payload.slice();
-
-        // Parse and consume length and id from packet bytes
-        let length = VarInt::decode(&mut bytes)?;
-        let id = VarInt::decode(&mut bytes)?;
+        let mut bytes: &[u8] = headers.payload.slice();
 
         let direction = if let Some(Tcp(tcp_header)) = headers.transport {
             // TODO: Don't use magic number
             if tcp_header.destination_port == 25565 { Serverbound } else { Clientbound }
         } else { panic!("Received packet without TCP headers") };
 
+        let _ = VarInt::decode(&mut bytes)?; // Toss the length, we don't need that jawn
+
+        let mut decompressed = Vec::new();
+
+        let id = if self.compression.is_some() {
+            let VarInt(data_length) = VarInt::decode(&mut bytes)?;
+
+            if data_length == 0 {
+                VarInt::decode(&mut bytes)?
+            } else {
+                let data_length = usize::try_from(data_length)
+                    .map_err(|_| DecodeError::MalformedBytes)?;
+
+                decompressed.resize(data_length, 0);
+
+                let (uncompressed, status) = decompress_slice(
+                    &mut decompressed,
+                    bytes,
+                    InflateConfig::default()
+                );
+
+                if status != zlib_rs::ReturnCode::Ok || uncompressed.len() != data_length {
+                    return Err(DecodeError::MalformedBytes);
+                }
+
+                let len = uncompressed.len();
+                decompressed.truncate(len);
+                bytes = &decompressed;
+
+                VarInt::decode(&mut bytes)?
+            }
+        } else {
+            VarInt::decode(&mut bytes)?
+        };
 
         let packet = Packet { 
-            length,
             id,
             direction, 
             phase: self.phase,
@@ -123,8 +150,11 @@ impl ProtocolParser {
                     => panic!("Encryption is not supported"),
                 PhasePayload::Login(login::Payload::EncryptionResponse())
                     => panic!("Encryption is not supported"),
-                PhasePayload::Login(login::Payload::SetCompression{ .. })
-                    => panic!("Compression is not supported"),
+                PhasePayload::Login(login::Payload::SetCompression { threshold }) => {
+                    self.compression = if threshold.0 >= 0 { Some(threshold.0 as u32) } else { None };
+
+                    Ok(packet)
+                }
                 _ => Ok(packet)
             };
         }

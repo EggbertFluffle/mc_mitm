@@ -1,6 +1,5 @@
 use crate::mc::{ Decode, DecodeError };
 
-#[allow(unused)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VarInt(pub i32);
 
@@ -26,7 +25,6 @@ impl Decode for VarInt {
     }
 }
 
-#[allow(unused)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VarLong(pub i64);
 
@@ -52,7 +50,6 @@ impl Decode for VarLong {
     }
 }
 
-#[allow(unused)]
 pub type Bool = bool;
 
 impl Decode for Bool {
@@ -66,7 +63,6 @@ impl Decode for Bool {
     }
 }
 
-#[allow(unused)]
 pub type Byte = i8;
 
 impl Decode for Byte {
@@ -80,7 +76,6 @@ impl Decode for Byte {
     }
 }
 
-#[allow(unused)]
 pub type UnsignedByte = u8;
 
 impl Decode for UnsignedByte {
@@ -94,7 +89,6 @@ impl Decode for UnsignedByte {
     }
 }
 
-#[allow(unused)]
 pub type Short = i16;
 
 impl Decode for Short {
@@ -110,7 +104,6 @@ impl Decode for Short {
     }
 }
 
-#[allow(unused)]
 pub type UnsignedShort = u16;
 
 impl Decode for UnsignedShort {
@@ -126,7 +119,6 @@ impl Decode for UnsignedShort {
     }
 }
 
-#[allow(unused)]
 pub type Int = i32;
 
 impl Decode for Int {
@@ -142,7 +134,6 @@ impl Decode for Int {
     }
 }
 
-#[allow(unused)]
 pub type UnsignedInt = u32;
 
 impl Decode for UnsignedInt {
@@ -158,7 +149,6 @@ impl Decode for UnsignedInt {
     }
 }
 
-#[allow(unused)]
 pub type Long = i64;
 
 impl Decode for Long {
@@ -174,7 +164,6 @@ impl Decode for Long {
     }
 }
 
-#[allow(unused)]
 pub type UnsignedLong = u64;
 
 impl Decode for UnsignedLong {
@@ -190,7 +179,6 @@ impl Decode for UnsignedLong {
     }
 }
 
-#[allow(unused)]
 pub type Float = f32;
 
 impl Decode for Float {
@@ -206,7 +194,6 @@ impl Decode for Float {
     }
 }
 
-#[allow(unused)]
 pub type Double = f64;
 
 impl Decode for Double {
@@ -222,7 +209,6 @@ impl Decode for Double {
     }
 }
 
-#[allow(unused)]
 pub type String = std::string::String;
 
 impl Decode for String {
@@ -240,7 +226,6 @@ impl Decode for String {
     }
 }
 
-#[allow(unused)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UUID(pub u128);
 
@@ -257,7 +242,6 @@ impl Decode for UUID {
     }
 }
 
-#[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct GameProfile {
     uuid: UUID,
@@ -274,7 +258,6 @@ impl Decode for GameProfile {
     }
 }
 
-#[allow(unused)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct LpVec3 {
     x: Double,
@@ -315,7 +298,6 @@ impl Decode for LpVec3 {
     }
 }
 
-#[allow(unused)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Position {
     x: i32,
@@ -335,7 +317,6 @@ impl Decode for Position {
     }
 }
 
-#[allow(unused)]
 pub type PrefixedOptional<T> = Option<T>;
 
 impl<T: Decode> Decode for PrefixedOptional<T> {
@@ -354,7 +335,6 @@ impl<T: Decode> Decode for PrefixedOptional<T> {
     }
 }
 
-#[allow(unused)]
 pub type PrefixedArray<T> = Vec<T>;
 
 impl<T: Decode> Decode for PrefixedArray<T> {
@@ -370,7 +350,6 @@ impl<T: Decode> Decode for PrefixedArray<T> {
     }
 }
 
-#[allow(unused)]
 #[derive(Debug)]
 pub enum Either<L, R> {
     Left(L),
