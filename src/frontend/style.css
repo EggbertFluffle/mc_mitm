@@ -1,0 +1,196 @@
+@font-face {
+    font-family: minecraft;
+    src: url(fonts/Minecraft.ttf);
+    font-weight: 400 700;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --background: #191513;
+    --text-color: #ddc7be;
+    --primary-color: #7c726c;
+    --secondary-color: #2C2321;
+}
+
+body {
+    background: var(--background);
+    backdrop-filter: blur(8px);
+    justify-content: center;
+    height: 100vh;
+
+    font-family: minecraft;
+}
+
+h1, h2, h3 {
+    text-align: center;
+    color: var(--text-color);
+    text-shadow: 2px 2px rgb(40, 40, 40);
+}
+
+h1 {
+    font-size: 2.5rem;
+    padding: 2rem;
+}
+
+h2 {
+    font-size: 1.5rem;
+    padding: 0 2rem;
+}
+
+p { color: white; }
+
+.ip-data {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+
+    p {
+        color: white;
+        padding: 1rem;
+    }
+}
+
+.map-buttons {
+    display: flex;
+    padding: 0 25vw;
+    flex-direction: row;
+    justify-content: space-evenly;
+    align-items: center;
+    margin: 1rem;
+}
+
+section .rows {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+}
+
+.coords {
+    padding: 2rem;
+}
+
+#coord-map {
+    background: transparent;
+    border: 2px solid var(--secondary-color);
+    cursor: grab;
+    touch-action: none;
+}
+
+#coord-map.dragging {
+    cursor: grabbing;
+}
+
+#coords, #player-coords {
+    font-family: monospace;
+    font-size: 1rem;
+}
+
+.log {
+    width: 320px;
+    align-self: stretch; /* grow to the height of the map column */
+    min-height: 320px;
+    display: flex;
+    flex-direction: column;
+    border: 2px solid var(--secondary-color);
+    padding: 0.5rem 0.75rem;
+
+    h3 {
+        margin: 0 0 0.5rem;
+    }
+
+}
+
+.log-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+
+    button {
+        flex: 1; /* split the tab bar evenly */
+        cursor: pointer;
+
+        &.active {
+            background: #333;
+            color: white;
+        }
+    }
+}
+
+.log-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+
+    &:empty::before {
+        content: attr(data-empty);
+        font-family: monospace;
+        font-size: 0.8rem;
+        padding: 0.3rem 0;
+        color: var(--primary-color);
+    }
+}
+
+.log-entry {
+    font-family: monospace;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    margin: 0;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--secondary-color);
+
+    time {
+        font-size: 0.7rem;
+        color: var(--primary-color);
+        margin-right: 0.5em;
+    }
+}
+
+button {
+    /* Minecraft-style colors */
+    background: #777777;
+    color: #ffffff;
+   
+    /* Blocky shape and border */
+    border: 2px solid #111111;
+    border-radius: 0;
+    padding: 10px 24px;
+   
+    /* Pixelated, beveled look */
+    box-shadow:
+      inset 2px 2px 0 #aaaaaa,
+      inset -2px -2px 0 #444444,
+      0 2px 0 #000000;
+   
+    /* Typography */
+    font-family: "Minecraft", monospace;
+    font-size: 16px;
+    text-shadow: 2px 2px 0 #3f3f3f;
+   
+    cursor: pointer;
+    transition: background 0.08s;
+
+    &:hover {
+        background: #999999;
+    }
+
+    &:active {
+        background: #555555;
+        box-shadow:
+            inset 2px 2px 0 #333333,
+            inset -2px -2px 0 #777777;
+        transform: translateY(1px);
+    }
+
+    &:focus-visible {
+        outline: 2px solid #ffffff;
+        outline-offset: 3px;
+    }
+}

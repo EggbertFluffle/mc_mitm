@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/style.css">
+    <title>Minecraft Man-In-The-Middle</title>
+</head>
+<body>
+    <header>
+        <h1>Minecraft Man-In-The-Middle</h1>
+        <h2>
+            Designed by Adrian Cervera and Harrison DiAmbrosio
+            for WPI CS584: Computer Networks
+        </h2>
+    </header>
+
+    <div class="ip-data">
+        <p>Client IP: client_ip</p>
+        <p>Server IP: server_ip</p>
+        <p>Seed: seed</p>
+    </div>
+
+    <div class="map-buttons">
+        <button id="toggle-crosshair" aria-pressed="true">Toggle Crosshair</button>
+        <button id="center-marker">Center Marker</button>
+    </div>
+
+    <section>
+        <div class="rows">
+            <div class="map">
+                <canvas id="coord-map"></canvas>
+            </div>
+
+            <div class="log">
+                <h3>Log</h3>
+                <div class="log-tabs" role="tablist" aria-label="Log categories">
+                    <button id="tab-entities" data-log="entity" role="tab" aria-selected="true" class="active" aria-controls="entity-log">Entities</button>
+                    <button id="tab-actions" data-log="action" role="tab" aria-selected="false" aria-controls="action-log">Actions</button>
+                </div>
+                <div class="log-body" id="entity-log" role="tabpanel" aria-labelledby="tab-entities" data-empty="No entities logged yet."></div>
+                <div class="log-body" id="action-log" role="tabpanel" aria-labelledby="tab-actions" data-empty="No actions logged yet." hidden></div>
+            </div>
+        </div>
+
+        <div class="coords rows">
+            <p id="cursor-coords">(0, 0)</p>
+            <p id="player-coords">Player Coords: (0, 0)</p>
+        </div>
+    </section>
+    <script src="worldmap.js"></script>
+</body>
+</html>
