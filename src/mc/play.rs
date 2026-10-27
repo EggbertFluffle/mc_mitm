@@ -238,10 +238,7 @@ impl Parse for Payload {
                 pitch: Float::decode(bytes)?,
                 seed: Long::decode(bytes)?
             },
-            _ => {
-                println!("Unable to handle packet id {}", id);
-                Err(DecodeError::MalformedBytes)?
-            }
+            _ => Err(DecodeError::MalformedBytes)?
         };
 
         Ok(vec![PhasePayload::Play(payload)])
