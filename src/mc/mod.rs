@@ -1,16 +1,23 @@
+mod types;
+pub mod state;
+
+pub mod handshake;
+pub mod status;
+pub mod login;
+pub mod configuration;
+pub mod play;
+
+use std::sync::{Arc, RwLock};
+
 use pcap::{Capture, Device};
 
 use etherparse::{PacketHeaders, err::packet::SliceError};
 use zlib_rs::{decompress_slice, InflateConfig};
 
 use types::{ VarInt };
+use state::GameState;
 
-mod types;
-pub mod handshake;
-pub mod status;
-pub mod login;
-pub mod configuration;
-pub mod play;
+use crate::mc::Phase::Play;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DecodeError {
@@ -33,10 +40,10 @@ pub trait Parse {
 }
 
 // 5 Phases of the protocol
-// Dictate how pcaket IDs and directions are interpreted
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// Dictate how packet IDs and directions are interpreted
+#[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
 pub enum Phase {
-    Handshake,
+    #[default] Handshake,
     Status,
     Login,
     Configuration,
@@ -54,20 +61,13 @@ pub struct Packet {
     pub payload: Vec<PhasePayload>
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ProtocolParser {
     pub phase: Phase,
     pub compression: Option<u32>
 }
 
 impl ProtocolParser {
-    pub fn new(init_phase: Phase) -> ProtocolParser {
-        ProtocolParser { 
-            phase: init_phase,
-            compression: None
-        }
-    }
-
     // parse_packet will return None if the packet was not complete and is expecting more bytes to
     // complete the packet
     pub fn parse_packet(&mut self, raw_packet: RawPacket) -> Result<Packet, DecodeError> {
@@ -190,31 +190,77 @@ impl pcap::PacketCodec for Codec {
     }
 }
 
-pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let device = Device::lookup()?
-        .ok_or("no device available")?;
-    println!("Using device: {}", device.name);
+pub struct Bridge {
+    game_state: Arc<RwLock<GameState>>,
+    protocol_parser: ProtocolParser
+}
 
-    let mut cap = Capture::from_device(device)?
-        .immediate_mode(true)
-        .timeout(0)
-        .open()?;
+impl Bridge {
+    pub fn new(game_state: Arc<RwLock<GameState>>) -> Bridge {
+        Bridge { 
+            game_state,
+            protocol_parser: ProtocolParser::default(),
+        }
+    }
 
-    cap.filter("tcp port 25565", true)?;
+    pub fn run(&mut self) {
+        let device = Device::lookup()
+            .expect("No device available")
+            .expect("No suitable devices present");
+        println!("Using device: {}", device.name);
 
-    let mut protocol_parser = ProtocolParser::new(Phase::Handshake);
+        let mut cap = Capture::from_device(device)
+            .expect("Unable to capture from device")
+            .immediate_mode(true)
+            .timeout(0)
+            .open()
+            .expect("Unable to open device for capturing");
 
-    for raw_packet in cap.iter(Codec) {
-        let raw_packet = raw_packet?;
+        let filter = format!("tcp port 25565");
+        cap.filter(&filter, true)
+            .expect("Failed to parse pcap filter");
 
-        if let Ok(packet) = protocol_parser.parse_packet(raw_packet) {
-            if let Some(payload) = packet.payload.get(0) {
-                if let PhasePayload::Play(play::Payload::ClientTickEnd()) = payload { } else {
-                    println!("{:?}", payload);
+        for raw_packet in cap.iter(Codec) {
+            let raw_packet = match raw_packet {
+                Err(_) => continue,
+                Ok(rp) => rp
+            };
+
+            if let Ok(packet) = self.protocol_parser.parse_packet(raw_packet) {
+                for payload in &packet.payload {
+                    self.change_state(payload);
                 }
             }
         }
     }
 
-    Ok(())
+    fn change_state(&mut self, phase_payload: &PhasePayload) {
+        use PhasePayload::*;
+
+        // Only play packets carry the state we track; don't take the write lock
+        // for every packet on the wire.
+        let Play(payload) = phase_payload else { return; };
+
+        use play::Payload::*;
+
+        let mut game_state = self.game_state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        match payload {
+            PlayerPosition { x, z, .. } => {
+                game_state.player.x = *x;
+                game_state.player.z = *z;
+            },
+            PlayerRotation { yaw, .. } => {
+                game_state.player.yaw = *yaw;
+            },
+            PlayerPositionRotation { x, z, yaw, .. } => {
+                game_state.player.x = *x;
+                game_state.player.z = *z;
+                game_state.player.yaw = *yaw;
+            },
+            _ => { }
+        };
+    }
 }
