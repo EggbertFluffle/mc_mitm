@@ -9,6 +9,7 @@ use tower_http::services::ServeDir;
 pub async fn run(port: u16) {
     let app = Router::new()
         .route("/api/health", get(health_check))
+        .route("/api/server-info", get(get_server_info))
         .nest_service("/", ServeDir::new("src/frontend"));
 
     let addr = format!("127.0.0.1:{port}");
@@ -26,7 +27,8 @@ async fn health_check() -> Json<Value> {
 
 async fn get_server_info() -> Json<Value> {
     Json(json!({
-        // MITM Target IP
-        // Server IP
+        "server_ip": crate::SERVER_IP,
+        "client_ip": crate::CLIENT_IP,
+        "seed": crate::WORLD_SEED
     }))
 }

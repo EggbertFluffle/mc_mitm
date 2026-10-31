@@ -2,7 +2,10 @@ mod mc;
 mod web;
 
 const PORT: u16 = 3000;
-const TARGET_IP: &str = "18.42.101.96";
+const SERVER_IP: &str = "18.42.101.96";
+const CLIENT_IP: &str = "18.42.101.184";
+
+const WORLD_SEED: &str = "8695372506103858576";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 

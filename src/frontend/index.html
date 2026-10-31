@@ -15,9 +15,9 @@
     </header>
 
     <div class="ip-data">
-        <p>Client IP: client_ip</p>
-        <p>Server IP: server_ip</p>
-        <p>Seed: seed</p>
+        <p>Client IP: <span id="client-ip">...</span></p>
+        <p>Server IP: <span id="server-ip">...</span></p>
+        <p>Seed: <span id="seed">...</span></p>
     </div>
 
     <div class="map-buttons">
@@ -43,10 +43,11 @@
         </div>
 
         <div class="coords rows">
-            <p id="cursor-coords">(0, 0)</p>
+            <p id="cursor-coords">Mouse Coords: (0, 0)</p>
             <p id="player-coords">Player Coords: (0, 0)</p>
         </div>
     </section>
-    <script src="worldmap.js"></script>
+    <script type="module" src="worldmap.js"></script>
+    <script type="module"src="api.js"></script>
 </body>
 </html>
