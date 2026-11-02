@@ -176,23 +176,32 @@ impl Parse for Payload {
                 yaw:            Float::decode(bytes)?,
                 pitch:          Float::decode(bytes)?
             },
-            (Clientbound, 0) => return Ok(parse_bundle(bytes)?),
-            (Clientbound, 1) => {
-                let add_entity = AddEntity { 
-                    id:             VarInt::decode(bytes)?,
-                    uuid:           UUID::decode(bytes)?,
-                    entity_type:    VarInt::decode(bytes)?,
-                    x:              Double::decode(bytes)?,
-                    y:              Double::decode(bytes)?,
-                    z:              Double::decode(bytes)?,
-                    velocity:       LpVec3::decode(bytes)?,
-                    pitch:          UnsignedByte::decode(bytes)?,
-                    yaw:            UnsignedByte::decode(bytes)?,
-                    head_yaw:       UnsignedByte::decode(bytes)?,
-                    data:           VarInt::decode(bytes)?
-                };
-
-                add_entity
+            (Clientbound, 0) => {
+                eprintln!("BUNDLE DELIM PACKET, bytes left: {}", bytes.len());
+                if bytes.is_empty() {
+                    BundleDelimiter()
+                } else {
+                    match parse_bundle(bytes) {
+                        Ok(b) => return Ok(b),
+                        Err(e) => {
+                            eprintln!("parse_bundle failed: {:?}, treating as delimiter", e);
+                            BundleDelimiter()
+                        }
+                    }
+                }
+            },
+            (Clientbound, 1) => AddEntity { 
+                id:             VarInt::decode(bytes)?,
+                uuid:           UUID::decode(bytes)?,
+                entity_type:    VarInt::decode(bytes)?,
+                x:              Double::decode(bytes)?,
+                y:              Double::decode(bytes)?,
+                z:              Double::decode(bytes)?,
+                velocity:       LpVec3::decode(bytes)?,
+                pitch:          UnsignedByte::decode(bytes)?,
+                yaw:            UnsignedByte::decode(bytes)?,
+                head_yaw:       UnsignedByte::decode(bytes)?,
+                data:           VarInt::decode(bytes)?
             },
             (Clientbound, 2) => EntityAnimate { 
                 id:             VarInt::decode(bytes)?,
@@ -265,7 +274,6 @@ fn parse_bundle(bytes: &mut &[u8]) -> Result<Vec<PhasePayload>, DecodeError> {
         if id.0 == 0 {
             return Ok(bundle);
         }
-
 
         if let Ok(mut payloads) = Payload::parse(&mut frame, Direction::Clientbound, id) {
             bundle.append(&mut payloads);
