@@ -17,7 +17,7 @@ use zlib_rs::{decompress_slice, InflateConfig};
 use types::{ VarInt };
 use state::GameState;
 
-use crate::mc::Phase::Play;
+use crate::mc::state::Entity;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DecodeError {
@@ -216,7 +216,7 @@ impl Bridge {
             .open()
             .expect("Unable to open device for capturing");
 
-        let filter = format!("tcp port 25565");
+        let filter = format!("tcp port 25565 and tcp[tcpflags] & tcp-push != 0");
         cap.filter(&filter, true)
             .expect("Failed to parse pcap filter");
 
@@ -226,10 +226,13 @@ impl Bridge {
                 Ok(rp) => rp
             };
 
-            if let Ok(packet) = self.protocol_parser.parse_packet(raw_packet) {
-                for payload in &packet.payload {
-                    self.change_state(payload);
-                }
+            match self.protocol_parser.parse_packet(raw_packet) {
+                Ok(packet) => {
+                    for payload in &packet.payload {
+                        self.change_state(payload);
+                    }
+                },
+                _ => { }
             }
         }
     }
@@ -237,8 +240,6 @@ impl Bridge {
     fn change_state(&mut self, phase_payload: &PhasePayload) {
         use PhasePayload::*;
 
-        // Only play packets carry the state we track; don't take the write lock
-        // for every packet on the wire.
         let Play(payload) = phase_payload else { return; };
 
         use play::Payload::*;
@@ -259,6 +260,17 @@ impl Bridge {
                 game_state.player.x = *x;
                 game_state.player.z = *z;
                 game_state.player.yaw = *yaw;
+            },
+            AddEntity { id, entity_type, x, z, yaw, .. } => {
+                println!("Add entity packet found");
+                game_state.entities.entry(id.0)
+                    .or_insert(Entity {
+                        id: id.0,
+                        x: *x,
+                        z: *z,
+                        yaw: *yaw,
+                        entity_type: entity_type.0
+                    });
             },
             _ => { }
         };

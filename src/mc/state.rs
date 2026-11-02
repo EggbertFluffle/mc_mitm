@@ -1,11 +1,13 @@
 use serde::Serialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Entity {
     pub id: i32,
     pub x: f64,
     pub z: f64,
-    pub entity_type: &'static str,
+    pub yaw: u8,
+    pub entity_type: i32
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -18,5 +20,5 @@ pub struct Player {
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct GameState {
     pub player: Player,
-    pub entities: Vec<Entity>
+    pub entities: HashMap<i32, Entity>
 }

@@ -5,7 +5,7 @@ use crate::mc::{Bridge, state::GameState};
 mod mc;
 mod web;
 
-const WEB_PORT: u16 = 3000;
+const WEB_PORT: u16 = 3001;
 const SERVER_PORT: u16 = 25565;
 const SERVER_IP: &str = "18.42.101.96";
 const CLIENT_IP: &str = "18.42.101.184";
