@@ -1,6 +1,7 @@
 use crate::mc::{ Decode, DecodeError, Direction, Parse, PhasePayload };
 use crate::mc::types::*;
 
+#[allow(unused)]
 #[derive(Debug)]
 pub enum Payload {
     // Serverbound

@@ -1,6 +1,7 @@
 use crate::mc::{ Decode, DecodeError, Direction, Parse, PhasePayload };
 use crate::mc::types::{ VarInt, UnsignedShort };
 
+#[allow(unused)]
 #[derive(Debug)]
 pub enum Payload {
     Intention{

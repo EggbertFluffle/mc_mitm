@@ -44,6 +44,7 @@ async fn health_check() -> Json<Value> {
     }))
 }
 
+#[allow(unused)]
 async fn get_server_info() -> Json<Value> {
     Json(json!({
         // MITM Target IP

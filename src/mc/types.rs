@@ -242,6 +242,7 @@ impl Decode for UUID {
     }
 }
 
+#[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct GameProfile {
     uuid: UUID,
