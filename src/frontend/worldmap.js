@@ -4,6 +4,9 @@ import { createBiomeLayer } from "./seedrenderer/biomelayer.js";
 const cursorCoords = document.getElementById('cursor-coords');
 const playerCoords = document.getElementById('player-coords');
 
+const actionLog = document.getElementById('action-log');
+const entityLog = document.getElementById('entity-log');
+
 function loadMarkerImage(file) {
     const img = new Image();
     img.src = `images/${file}.png`;
@@ -346,12 +349,12 @@ const canvasInstance = function(seed) {
             const rect = element.getBoundingClientRect();
             const px = event.clientX - rect.left;
             const py = event.clientY - rect.top;
-            const x = Math.round((px - (element.width / 2 + offX)) / scale);
-            const y = Math.round((py - (element.height / 2 + offY)) / scale);
+            const x = (px - (element.width / 2 + offX)) / scale;
+            const y = (py - (element.height / 2 + offY)) / scale;
             return { px, py, x, y };
         })();
 
-        cursorCoords.textContent = `Mouse Coords: (${x}, ${y})`;
+        cursorCoords.textContent = `Mouse Coords: (${x.toFixed(3)}, ${y.toFixed(3)})`;
         draw();
 
         // Crosshair on the point under the cursor.
@@ -368,7 +371,7 @@ const canvasInstance = function(seed) {
     });
 
     element.addEventListener('mouseleave', () => {
-        cursorCoords.textContent = 'Mouse Coords: (0, 0)';
+        cursorCoords.textContent = 'Mouse Coords: (0.000, 0.000)';
         draw();
     });
 
@@ -400,7 +403,7 @@ function setPlayerPosition(x, z, yaw) {
     markers.player.y = z;
     if (yaw !== undefined)
         markers.player.yaw = yaw;
-    playerCoords.textContent = `Player Coords: (${x}, ${z})`;
+    playerCoords.textContent = `Player Coords: (${x.toFixed(5)}, ${z.toFixed(5)})`;
     canvas.draw();
 }
 
@@ -416,8 +419,8 @@ function populateMobs(count = 12, maxRadius = 32) {
 
         markers.mobs[`fake:${i}`] = {
             type,
-            x: Math.round(Math.cos(angle) * dist),
-            y: Math.round(Math.sin(angle) * dist)
+            x: Math.cos(angle) * dist,
+            y: Math.sin(angle) * dist
         };
     }
 
@@ -446,12 +449,28 @@ function syncMobs(entities) {
 
         markers.mobs[id] = {
             type,
-            x: Math.round(entity.x),
-            y: Math.round(entity.z)
+            x: entity.x,
+            y: entity.z
         };
     }
 
     canvas.draw();
+}
+
+function logActions(actions_log) {
+	for(let a of actions_log) {
+		const log = document.createElement("p");
+		log.innerText = a;
+		actionLog.appendChild(log);
+	}
+}
+
+function logEntities(entities_log) {
+	for(let e of entities_log) {
+		const log = document.createElement("p");
+		log.innerText = e;
+		entityLog.appendChild(log);
+	}
 }
 
 // Poll the game-state API on a fixed interval and move the player marker.
@@ -460,11 +479,14 @@ async function pollGameState() {
     try {
         const state = await fetchGameState();
         setPlayerPosition(
-            Math.round(state.player.x),
-            Math.round(state.player.z),
+            state.player.x,
+            state.player.z,
             state.player.yaw
         );
         syncMobs(state.entities);
+
+		logEntities(state.entities_log);
+		logActions(state.action_log);
 
         // Keep the viewport locked onto the player while follow mode is on.
         if (followPlayerEnabled)

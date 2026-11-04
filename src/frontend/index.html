@@ -35,20 +35,20 @@
             <div class="log">
                 <h3>Log</h3>
                 <div class="log-tabs" role="tablist" aria-label="Log categories">
-                    <button id="tab-entities" data-log="entity" role="tab" aria-selected="true" class="active" aria-controls="entity-log">Entities</button>
-                    <button id="tab-actions" data-log="action" role="tab" aria-selected="false" aria-controls="action-log">Actions</button>
+					<button id="tab-actions" data-log="action" role="tab" aria-selected="true" class="active" aria-controls="action-log">Actions</button>
+                    <button id="tab-entities" data-log="entity" role="tab" aria-selected="false" aria-controls="entity-log">Entities</button>
                 </div>
-                <div class="log-body" id="entity-log" role="tabpanel" aria-labelledby="tab-entities" data-empty="No entities logged yet."></div>
-                <div class="log-body" id="action-log" role="tabpanel" aria-labelledby="tab-actions" data-empty="No actions logged yet." hidden></div>
+                <div class="log-body" id="entity-log" role="tabpanel" aria-labelledby="tab-entities" data-empty="No entities logged yet." hidden></div>
+                <div class="log-body" id="action-log" role="tabpanel" aria-labelledby="tab-actions" data-empty="No actions logged yet."></div>
             </div>
         </div>
 
         <div class="coords rows">
-            <p id="cursor-coords">Mouse Coords: (0, 0)</p>
-            <p id="player-coords">Player Coords: (0, 0)</p>
+            <p id="cursor-coords">Mouse Coords: (0.000, 0.000)</p>
+            <p id="player-coords">Player Coords: (0.00000, 0.00000)</p>
         </div>
     </section>
     <script type="module" src="worldmap.js"></script>
-    <script type="module"src="api.js"></script>
+	<script type="module" src="api.js"></script>
 </body>
 </html>
