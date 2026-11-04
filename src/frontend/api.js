@@ -5,6 +5,12 @@ export async function fetchServerInfo() {
     return res.json();
 }
 
+export async function fetchGameState() {
+    const res = await fetch('/api/game_state');
+    if (!res.ok) throw new Error(`game_state failed: ${res.status}`);
+    return res.json();
+}
+
 function initServerInfo() {
     fetchServerInfo()
         .then(info => {

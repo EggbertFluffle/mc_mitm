@@ -1,7 +1,35 @@
-import { fetchServerInfo } from "./api";
+import { fetchServerInfo, fetchGameState } from "./api.js";
 
 const cursorCoords = document.getElementById('cursor-coords');
 const playerCoords = document.getElementById('player-coords');
+
+function loadMarkerImage(file) {
+    const img = new Image();
+    img.src = `images/${file}`;
+    return img;
+}
+
+// Human-readable mob type -> image used for its map marker.
+const markerImages = {
+    player: loadMarkerImage('steve.jpg'),
+    pig: loadMarkerImage('pig.jpg'),
+    sheep: loadMarkerImage('sheep.jpg'),
+    cow: loadMarkerImage('cow.jpg')
+};
+
+const mobTypes = Object.keys(markerImages).filter((type) => type !== 'player');
+
+// World positions of everything drawn on top of the grid.
+const markers = {
+    // The player always exists and starts at the origin.
+    player: { x: 0, y: 0 },
+    // Each mob: { type: 'pig' | 'sheep' | 'cow', x, y }
+    mobs: []
+};
+
+// Marker sizes are in screen pixels so they stay visible at every zoom level.
+const PLAYER_MARKER_SIZE = 32;
+const MOB_MARKER_SIZE = 26;
 
 const colors = {
     border: "#6b4a3e",
@@ -22,7 +50,10 @@ const mapSettings = {
     // Grid cells collapse when they get smaller than this many pixels.
     minSpacing: 32,
 
-    stepLadder: [1, 4, 16, 64, 128, 512, 1024, 4096, 8192]
+    stepLadder: [1, 4, 16, 64, 128, 512, 1024, 4096, 8192],
+
+    // How often to poll the game-state API, in seconds.
+    pollInterval: 1
 };
 
 const canvasInstance = function(seed) {
@@ -122,6 +153,33 @@ const canvasInstance = function(seed) {
         ctx.beginPath();
         ctx.arc(ox, oy, 3, 0, Math.PI * 2);
         ctx.fill();
+
+        // Player and mob markers. World coords -> screen:
+        // screen x grows right, world y grows up.
+        function drawMarker(type, coords, size) {
+            const img = markerImages[type];
+            if (!img.complete || img.naturalWidth === 0)
+                return;
+
+            const px = ox + coords.x * scale;
+            const py = oy - coords.y * scale;
+
+            // Skip markers outside the viewport (plus a marker of margin).
+            if (px < -size || px > element.width + size ||
+                py < -size || py > element.height + size)
+                return;
+
+            ctx.drawImage(img, px - size / 2, py - size / 2, size, size);
+            ctx.strokeStyle = colors.border;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px - size / 2, py - size / 2, size, size);
+        }
+
+        for (const mob of markers.mobs)
+            drawMarker(mob.type, mob, MOB_MARKER_SIZE);
+
+        // Draw the player last so it sits on top of any overlapping mobs.
+        drawMarker('player', markers.player, PLAYER_MARKER_SIZE);
     }
 
     function resize() {
@@ -238,6 +296,60 @@ const canvas = await (async () => {
 })();
 
 canvas.resize();
+
+// Redraw once marker images finish loading (they load asynchronously).
+for (const img of Object.values(markerImages))
+    if (!img.complete)
+        img.addEventListener('load', () => canvas.draw());
+
+// Move the player marker to world coords (x, y).
+function setPlayerPosition(x, y) {
+    markers.player.x = x;
+    markers.player.y = y;
+    playerCoords.textContent = `Player Coords: (${x}, ${y})`;
+    canvas.draw();
+}
+
+// Populate the map with a random assortment of mobs in random positions
+// near the origin, replacing any previously spawned mobs.
+function populateMobs(count = 12, maxRadius = 32) {
+    markers.mobs = [];
+
+    for (let i = 0; i < count; i++) {
+        const type = mobTypes[Math.floor(Math.random() * mobTypes.length)];
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.floor(Math.random() * maxRadius);
+
+        markers.mobs.push({
+            type,
+            x: Math.round(Math.cos(angle) * dist),
+            y: Math.round(Math.sin(angle) * dist)
+        });
+    }
+
+    canvas.draw();
+    return markers.mobs;
+}
+
+setPlayerPosition(markers.player.x, markers.player.y);
+
+// Poll the game-state API on a fixed interval and move the player marker.
+// A failed poll keeps the last known position until the next one succeeds.
+async function pollGameState() {
+    try {
+        const state = await fetchGameState();
+        setPlayerPosition(
+            Math.round(state.player.x),
+            Math.round(state.player.z)
+        );
+    } catch (err) {
+        console.error('Failed to poll game state:', err);
+    }
+}
+
+setInterval(pollGameState, mapSettings.pollInterval * 1000);
+
+export { setPlayerPosition, populateMobs };
 
 const crosshairButton = document.getElementById('toggle-crosshair');
 function updateCrosshair() {
