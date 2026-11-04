@@ -74,6 +74,7 @@ section .rows {
 
 .coords {
     padding: 2rem;
+    font-size: 1.5rem;
 }
 
 #coord-map {
@@ -81,15 +82,10 @@ section .rows {
     border: 2px solid var(--secondary-color);
     cursor: grab;
     touch-action: none;
-}
 
-#coord-map.dragging {
-    cursor: grabbing;
-}
-
-#coords, #player-coords {
-    font-family: monospace;
-    font-size: 1rem;
+    &.dragging {
+        cursor: grabbing;
+    }
 }
 
 .log {
@@ -177,11 +173,9 @@ button {
     cursor: pointer;
     transition: background 0.08s;
 
-    &:hover {
-        background: #999999;
-    }
+    &:hover { background: #999999; }
 
-    &:active {
+    &.active {
         background: #555555;
         box-shadow:
             inset 2px 2px 0 #333333,

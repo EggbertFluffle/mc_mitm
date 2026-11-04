@@ -326,3 +326,29 @@ impl Parse for Payload {
     }
 }
 
+// Thank you big pickle <3
+fn parse_bundle(bytes: &mut &[u8]) -> Result<Vec<PhasePayload>, DecodeError> {
+    let mut bundle: Vec<PhasePayload> = Vec::new();
+
+    loop {
+        let VarInt(length) = VarInt::decode(bytes)?;
+        let length = length as usize;
+
+        let all: &[u8] = *bytes;
+        if all.len() < length {
+            return Err(DecodeError::PrematureByteEnd);
+        }
+        let (mut frame, rest) = all.split_at(length);
+        *bytes = rest;
+
+        let id = VarInt::decode(&mut frame)?;
+
+        if id.0 == 0 {
+            return Ok(bundle);
+        }
+
+        if let Ok(mut payloads) = Payload::parse(&mut frame, Direction::Clientbound, id) {
+            bundle.append(&mut payloads);
+        }
+    }
+}

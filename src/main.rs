@@ -9,9 +9,10 @@ const WEB_PORT: u16 = 3001;
 #[allow(unused)]
 const SERVER_PORT: u16 = 25565;
 #[allow(unused)]
-const CLIENT_IP: &str = "18.42.101.96";
+const SERVER_IP: &str = "18.42.101.96";
 #[allow(unused)]
-const ROUTER_IP: &str = "18.42.101.96";
+const CLIENT_IP: &str = "18.42.101.184";
+const WORLD_SEED: &str = "8695372506103858576";
 
 fn main() {
     let game_state = Arc::new(RwLock::new(GameState::default()));

@@ -15,6 +15,7 @@ pub async fn run(port: u16, shared_state: Arc<RwLock<GameState>>) {
     let app = Router::new()
         .route("/api/game_state", get(game_state))
         .route("/api/health", get(health_check))
+        .route("/api/server-info", get(get_server_info))
         .nest_service("/", ServeDir::new("src/frontend"))
         .with_state(shared_state);
 
@@ -47,7 +48,8 @@ async fn health_check() -> Json<Value> {
 #[allow(unused)]
 async fn get_server_info() -> Json<Value> {
     Json(json!({
-        // MITM Target IP
-        // Server IP
+        "server_ip": crate::SERVER_IP,
+        "client_ip": crate::CLIENT_IP,
+        "seed": crate::WORLD_SEED
     }))
 }
