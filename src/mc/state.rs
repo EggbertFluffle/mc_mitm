@@ -19,5 +19,8 @@ pub struct Player {
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct GameState {
     pub player: Player,
-    pub entities: HashMap<i32, Entity>
+    pub entities: HashMap<i32, Entity>,
+    pub timestamp: i64,
+    pub action_log: Vec<String>,
+    pub entities_log: Vec<String>
 }

@@ -29,14 +29,15 @@ pub async fn run(port: u16, shared_state: Arc<RwLock<GameState>>) {
 async fn game_state(
     State(game_state): State<Arc<RwLock<GameState>>>,
 ) -> Json<GameState> {
-    let snapshot = {
-        let state = game_state
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        state.clone()
-    };
+    let mut state = game_state
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    Json(snapshot)
+    let clone = state.clone();
+    state.action_log.clear();
+    state.entities_log.clear();
+
+    Json(clone)
 }
 
 async fn health_check() -> Json<Value> {

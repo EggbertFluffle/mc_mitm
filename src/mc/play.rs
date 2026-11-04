@@ -106,6 +106,17 @@ pub enum Payload {
         yaw: UnsignedByte,
         pitch: UnsignedByte
     },
+    OpenScreen {
+        id: VarInt,
+        window_type: VarInt,
+        title: String
+    },
+    CombatEnd(),
+    CombatStart(),
+    CombatDeath {
+        id: VarInt,
+        message: String
+    },
     RemoveEntities {
         ids: PrefixedArray<VarInt>,
     },
@@ -114,6 +125,11 @@ pub enum Payload {
         head_yaw: UnsignedByte
     },
     EntityMetadata(), // I ain't doin allat
+    SetHealth {
+        health: Float,
+        food: VarInt,
+        saturation: Float
+    },
     UpdateTime {
         world_age: Long,
         clocks: PrefixedArray<(VarInt, VarLong, Float, Float)>
@@ -297,6 +313,17 @@ impl Parse for Payload {
                 yaw: UnsignedByte::decode(bytes)?,
                 pitch: UnsignedByte::decode(bytes)?,
             },
+            (Clientbound, 60) => OpenScreen {
+                id: VarInt::decode(bytes)?,
+                window_type: VarInt::decode(bytes)?,
+                title: String::decode(bytes)?
+            },
+            (Clientbound, 67) => CombatEnd(),
+            (Clientbound, 68) => CombatStart(),
+            (Clientbound, 69) => CombatDeath {
+                id: VarInt::decode(bytes)?,
+                message: String::decode(bytes)?
+            },
             (Clientbound, 78) => RemoveEntities {
                 ids: PrefixedArray::<VarInt>::decode(bytes)?
             },
@@ -305,6 +332,11 @@ impl Parse for Payload {
                 head_yaw: UnsignedByte::decode(bytes)?
             },
             (Clientbound, 101) => EntityMetadata(),
+            (Clientbound, 106) => SetHealth {
+                health: Float::decode(bytes)?,
+                food: VarInt::decode(bytes)?,
+                saturation: Float::decode(bytes)?,
+            },
             (Clientbound, 115) => UpdateTime {
                 world_age: Long::decode(bytes)?,
                 clocks: PrefixedArray::<(VarInt, VarLong, Float, Float)>::decode(bytes)?
@@ -323,32 +355,5 @@ impl Parse for Payload {
         };
 
         Ok(vec![PhasePayload::Play(payload)])
-    }
-}
-
-// Thank you big pickle <3
-fn parse_bundle(bytes: &mut &[u8]) -> Result<Vec<PhasePayload>, DecodeError> {
-    let mut bundle: Vec<PhasePayload> = Vec::new();
-
-    loop {
-        let VarInt(length) = VarInt::decode(bytes)?;
-        let length = length as usize;
-
-        let all: &[u8] = *bytes;
-        if all.len() < length {
-            return Err(DecodeError::PrematureByteEnd);
-        }
-        let (mut frame, rest) = all.split_at(length);
-        *bytes = rest;
-
-        let id = VarInt::decode(&mut frame)?;
-
-        if id.0 == 0 {
-            return Ok(bundle);
-        }
-
-        if let Ok(mut payloads) = Payload::parse(&mut frame, Direction::Clientbound, id) {
-            bundle.append(&mut payloads);
-        }
     }
 }

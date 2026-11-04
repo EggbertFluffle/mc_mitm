@@ -377,6 +377,9 @@ impl Bridge {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         match payload {
+            Attack { id } => {
+                game_state.action_log.push(format!("Player has attacked {}", id.0));
+            },
             PlayerPosition { x, z, .. } => {
                 game_state.player.x = *x;
                 game_state.player.z = *z;
@@ -427,7 +430,45 @@ impl Bridge {
                 for ele in ids {
                     _ = game_state.entities.remove(&ele.0);
                 }
-            }
+            },
+            UpdateTime { world_age, .. } => {
+                game_state.timestamp = *world_age;
+            },
+            OpenScreen { window_type, .. } => {
+                game_state.action_log.push(format!(
+                    "Player has opened up a {}",
+                    match window_type.0 {
+                        2   => "chest",
+                        8   => "anvil",
+                        9   => "beacon",
+                        10  => "blast_furnace",
+                        11  => "brewing_stand",
+                        12  => "crafting",
+                        13  => "enchantment",
+                        14  => "furnace",
+                        15  => "grindstone",
+                        16  => "hopper",
+                        17  => "lectern",
+                        18  => "loom",
+                        19  => "merchant",
+                        20  => "shulker_box",
+                        21  => "smithing",
+                        22  => "smoker",
+                        23  => "cartography_table",
+                        24  => "stonecutter",
+                        _   => "unknown"
+                    }
+                ));
+            },
+            CombatEnd() => {
+                game_state.action_log.push("Player has left combat".to_string());
+            },
+            CombatStart() => {
+                game_state.action_log.push("Player has entered combat".to_string());
+            },
+            CombatDeath { message, .. } => {
+                game_state.action_log.push(message.clone());
+            },
             _ => { }
         };
     }
