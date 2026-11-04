@@ -1,4 +1,5 @@
 import { fetchServerInfo, fetchGameState } from "./api.js";
+import { createBiomeLayer } from "./seedrenderer/biomelayer.js";
 
 const cursorCoords = document.getElementById('cursor-coords');
 const playerCoords = document.getElementById('player-coords');
@@ -12,19 +13,36 @@ function loadMarkerImage(file) {
 // Human-readable mob type -> image used for its map marker.
 const markerImages = {
     player: loadMarkerImage('steve'),
+    cow: loadMarkerImage('cow'),
     pig: loadMarkerImage('pig'),
     sheep: loadMarkerImage('sheep'),
-    cow: loadMarkerImage('cow')
+    skeleton: loadMarkerImage('skeleton'),
+    spider: loadMarkerImage('spider'),
+    villager: loadMarkerImage('villager'),
+    wolf: loadMarkerImage('wolf'),
+    zombie: loadMarkerImage('zombie'),
 };
 
 const mobTypes = Object.keys(markerImages).filter((type) => type !== 'player');
 
+// Reverse of entities.json: numeric entity_type -> marker type name.
+const ENTITY_TYPES_BY_ID = await (async () => {
+    const res = await fetch('./entities.json');
+    if (!res.ok) throw new Error(`entities.json failed: ${res.status}`);
+    const idsByName = await res.json();
+    return Object.fromEntries(
+        Object.entries(idsByName).map(([name, id]) => [String(id), name])
+    );
+})();
+
 // World positions of everything drawn on top of the grid.
 const markers = {
     // The player always exists and starts at the origin.
-    player: { x: 0, y: 0 },
-    // Each mob: { type: 'pig' | 'sheep' | 'cow', x, y }
-    mobs: []
+    // yaw 0 faces south (+z), 90 west (-x), increasing clockwise.
+    player: { x: 0, y: 0, yaw: 0 },
+    // Mobs keyed by their server-assigned entity id.
+    // Each value: { type: 'pig' | 'sheep' | ..., x (east), y (z, south) }
+    mobs: {}
 };
 
 // Marker sizes are in screen pixels so they stay visible at every zoom level.
@@ -35,6 +53,7 @@ const colors = {
     border: "#6b4a3e",
     gridStroke: "#6b4a3e",
     crosshair: "red",
+    playerArrow: "#ff5555",
     labels: "white",
     axes: "#ddc7be"
 };
@@ -53,7 +72,7 @@ const mapSettings = {
     stepLadder: [1, 4, 16, 64, 128, 512, 1024, 4096, 8192],
 
     // How often to poll the game-state API, in seconds.
-    pollInterval: 1
+    pollInterval: 0.5
 };
 
 const canvasInstance = function(seed) {
@@ -71,11 +90,17 @@ const canvasInstance = function(seed) {
     let startOffX = 0;
     let startOffY = 0;
 
+    const biomeLayer = createBiomeLayer(seed, () => draw());
+
     function draw() {
         ctx.clearRect(0, 0, element.width, element.height);
 
         const ox = Math.round(element.width / 2 + offX);
         const oy = Math.round(element.height / 2 + offY);
+
+        const view = { width: element.width, height: element.height, ox: ox, oy: oy, scale: scale };
+        biomeLayer.draw(ctx, view);
+        biomeLayer.update(view);
 
         ctx.strokeStyle = colors.gridStroke;
         ctx.lineWidth = 1;
@@ -145,8 +170,26 @@ const canvasInstance = function(seed) {
                 continue;
             const py = oy - k * spacing;
             const offset = k > 0 ? -12 : 0;
-            ctx.fillText(String(k * step), ox - 4, py + offset);
+            // z points down (south), so the line above the origin is negative z.
+            ctx.fillText(String(-k * step), ox - 4, py + offset);
         }
+
+        // Axis letters and compass labels (chunkbase standard:
+        // -x west, +x east, -z north, +z south).
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText('X', element.width - 14, oy - 18);
+        ctx.fillText('Z', ox - 14, element.height - 18);
+
+        ctx.font = '10px monospace';
+        ctx.fillText('N', element.width / 2, 4);
+        ctx.fillText('S', element.width / 2, element.height - 14);
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.fillText('W', 4, element.height / 2);
+        ctx.textAlign = 'right';
+        ctx.fillText('E', element.width - 4, element.height / 2);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
 
         // Origin Marker
         ctx.fillStyle = colors.border;
@@ -155,14 +198,14 @@ const canvasInstance = function(seed) {
         ctx.fill();
 
         // Player and mob markers. World coords -> screen:
-        // screen x grows right, world y grows up.
+        // screen x grows right (east), world z grows down (south).
         function drawMarker(type, coords, size) {
             const img = markerImages[type];
             if (!img.complete || img.naturalWidth === 0)
                 return;
 
             const px = ox + coords.x * scale;
-            const py = oy - coords.y * scale;
+            const py = oy + coords.y * scale;
 
             // Skip markers outside the viewport (plus a marker of margin).
             if (px < -size || px > element.width + size ||
@@ -175,11 +218,50 @@ const canvasInstance = function(seed) {
             ctx.strokeRect(px - size / 2, py - size / 2, size, size);
         }
 
-        for (const mob of markers.mobs)
+        for (const mob of Object.values(markers.mobs))
             drawMarker(mob.type, mob, MOB_MARKER_SIZE);
 
         // Draw the player last so it sits on top of any overlapping mobs.
         drawMarker('player', markers.player, PLAYER_MARKER_SIZE);
+
+        // Heading arrow: yaw 0 is south (+z, screen-down), 90 is west
+        // (-x, screen-left), increasing clockwise. Rotating the screen-down
+        // vector (0, 1) clockwise in canvas space reproduces that exactly.
+        function drawPlayerYawArrow() {
+            const px = ox + markers.player.x * scale;
+            const py = oy + markers.player.y * scale;
+
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(markers.player.yaw * Math.PI / 180);
+
+            // Arrow starts just past the marker edge, pointing screen-down
+            // before rotation (i.e. yaw 0 -> south).
+            const startY = PLAYER_MARKER_SIZE / 2 + 2;
+            const tipY = startY + 16;
+
+            ctx.strokeStyle = colors.playerArrow;
+            ctx.fillStyle = colors.playerArrow;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, startY);
+            ctx.lineTo(0, tipY);
+            ctx.stroke();
+
+            // Arrowhead: two short edges folding back from the tip.
+            const headLength = 7;
+            const spread = Math.PI / 6; // 30 degrees off the shaft
+            ctx.beginPath();
+            ctx.moveTo(0, tipY);
+            ctx.lineTo(headLength * Math.sin(spread), tipY - headLength * Math.cos(spread));
+            ctx.lineTo(-headLength * Math.sin(spread), tipY - headLength * Math.cos(spread));
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        drawPlayerYawArrow();
     }
 
     function resize() {
@@ -206,6 +288,14 @@ const canvasInstance = function(seed) {
         offX = offX * ratio - (px - element.width / 2) * (ratio - 1);
         offY = offY * ratio - (py - element.height / 2) * (ratio - 1);
         scale = newScale;
+        draw();
+    }
+
+    // Pan the map so world coords (x, z) sit at the canvas center.
+    // Screen px = (width/2 + offX) + x*scale, so centering needs offX = -x*scale.
+    function centerOn(x, z) {
+        offX = -x * scale;
+        offY = -z * scale;
         draw();
     }
 
@@ -257,7 +347,7 @@ const canvasInstance = function(seed) {
             const px = event.clientX - rect.left;
             const py = event.clientY - rect.top;
             const x = Math.round((px - (element.width / 2 + offX)) / scale);
-            const y = Math.round((element.height / 2 + offY - py) / scale);
+            const y = Math.round((py - (element.height / 2 + offY)) / scale);
             return { px, py, x, y };
         })();
 
@@ -284,7 +374,8 @@ const canvasInstance = function(seed) {
 
     return {
         resize: resize,
-        draw: draw
+        draw: draw,
+        centerOn: centerOn
     };
 }
 
@@ -302,29 +393,32 @@ for (const img of Object.values(markerImages))
     if (!img.complete)
         img.addEventListener('load', () => canvas.draw());
 
-// Move the player marker to world coords (x, y).
-function setPlayerPosition(x, y) {
+// Move the player marker to world coords (x, z).
+// Move the player marker to world coords (x, z), optionally updating yaw.
+function setPlayerPosition(x, z, yaw) {
     markers.player.x = x;
-    markers.player.y = y;
-    playerCoords.textContent = `Player Coords: (${x}, ${y})`;
+    markers.player.y = z;
+    if (yaw !== undefined)
+        markers.player.yaw = yaw;
+    playerCoords.textContent = `Player Coords: (${x}, ${z})`;
     canvas.draw();
 }
 
 // Populate the map with a random assortment of mobs in random positions
 // near the origin, replacing any previously spawned mobs.
 function populateMobs(count = 12, maxRadius = 32) {
-    markers.mobs = [];
+    markers.mobs = {};
 
     for (let i = 0; i < count; i++) {
         const type = mobTypes[Math.floor(Math.random() * mobTypes.length)];
         const angle = Math.random() * Math.PI * 2;
         const dist = Math.floor(Math.random() * maxRadius);
 
-        markers.mobs.push({
+        markers.mobs[`fake:${i}`] = {
             type,
             x: Math.round(Math.cos(angle) * dist),
             y: Math.round(Math.sin(angle) * dist)
-        });
+        };
     }
 
     canvas.draw();
@@ -333,6 +427,33 @@ function populateMobs(count = 12, maxRadius = 32) {
 
 setPlayerPosition(markers.player.x, markers.player.y);
 
+// Sync mob markers against the latest entity snapshot: move existing mobs,
+// add any newly seen entity ids, and drop mobs the server no longer reports.
+function syncMobs(entities) {
+    // Remove stored mobs whose id disappeared from the latest result.
+    for (const id of Object.keys(markers.mobs))
+        if (!(id in entities))
+            delete markers.mobs[id];
+
+    for (const [id, entity] of Object.entries(entities)) {
+        const type = ENTITY_TYPES_BY_ID[entity.entity_type];
+
+        // entity_type has no entry in entities.json (e.g. a new mob type).
+        if (!type) {
+            console.warn(`Unknown entity_type ${entity.entity_type} for entity ${id}`);
+            continue;
+        }
+
+        markers.mobs[id] = {
+            type,
+            x: Math.round(entity.x),
+            y: Math.round(entity.z)
+        };
+    }
+
+    canvas.draw();
+}
+
 // Poll the game-state API on a fixed interval and move the player marker.
 // A failed poll keeps the last known position until the next one succeeds.
 async function pollGameState() {
@@ -340,8 +461,14 @@ async function pollGameState() {
         const state = await fetchGameState();
         setPlayerPosition(
             Math.round(state.player.x),
-            Math.round(state.player.z)
+            Math.round(state.player.z),
+            state.player.yaw
         );
+        syncMobs(state.entities);
+
+        // Keep the viewport locked onto the player while follow mode is on.
+        if (followPlayerEnabled)
+            canvas.centerOn(markers.player.x, markers.player.y);
     } catch (err) {
         console.error('Failed to poll game state:', err);
     }
@@ -364,3 +491,25 @@ crosshairButton.addEventListener('click', () => {
 });
 
 updateCrosshair();
+
+const centerButton = document.getElementById('center-marker');
+centerButton.addEventListener('click', () => {
+    canvas.centerOn(markers.player.x, markers.player.y);
+});
+
+let followPlayerEnabled = false;
+const followButton = document.getElementById('follow-player');
+function updateFollow() {
+    followButton.setAttribute('aria-pressed', String(followPlayerEnabled));
+    followButton.classList.toggle('active', followPlayerEnabled);
+}
+
+followButton.addEventListener('click', () => {
+    followPlayerEnabled = !followPlayerEnabled;
+    // Snap to the player immediately instead of waiting for the next poll.
+    if (followPlayerEnabled)
+        canvas.centerOn(markers.player.x, markers.player.y);
+    updateFollow();
+});
+
+updateFollow();

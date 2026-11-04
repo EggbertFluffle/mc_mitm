@@ -382,12 +382,12 @@ impl Bridge {
                 game_state.player.z = *z;
             },
             PlayerRotation { yaw, .. } => {
-                game_state.player.yaw = *yaw % 360.0;
+                game_state.player.yaw = yaw.rem_euclid(360.0);
             },
             PlayerPositionRotation { x, z, yaw, .. } => {
                 game_state.player.x = *x;
                 game_state.player.z = *z;
-                game_state.player.yaw = *yaw % 360.0;
+                game_state.player.yaw = yaw.rem_euclid(360.0);
             },
             AddEntity { id, entity_type, x, z, yaw, .. } => {
                 game_state.entities.entry(id.0)
