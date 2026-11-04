@@ -53,6 +53,7 @@ pub enum Phase {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction { Serverbound, Clientbound }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct Packet {
     pub id: VarInt,

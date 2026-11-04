@@ -1,8 +1,10 @@
+#[allow(unused)]
 use std::path::Prefix;
 
 use crate::mc::{ Decode, DecodeError, Direction, Parse, PhasePayload };
 use crate::mc::types::{ Bool, Byte, Either, Int, Long, PrefixedArray, PrefixedOptional, String, UUID, UnsignedByte, VarInt };
 
+#[allow(unused)]
 #[derive(Debug)]
 pub enum Payload {
     // Serverbound
