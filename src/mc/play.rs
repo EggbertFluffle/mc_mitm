@@ -5,7 +5,7 @@ use crate::mc::types::*;
 #[derive(Debug)]
 pub enum Payload {
     // Serverbound
-    Attack { entity_id: VarInt },
+    Attack { id: VarInt },
     ClientTickEnd(),
     KeepServerAlive { id: Long },
     PlayerPosition {
@@ -89,15 +89,28 @@ pub enum Payload {
     ChunkBiomes(), // I ain't doin allat
     KeepClientAlive { id: Long },
     EntityPosition {
-        entity_id: VarInt,
-        properties: VarInt,
+        id: VarInt,
+        on_ground: bool,
+        steps: Vec<(VarInt, f32, f32, f32)>
     },
     EntityPositionRotation {
-        entity_id: VarInt,
-        properties: VarInt,
+        id: VarInt,
+        on_ground: bool,
+        steps: Vec<(VarInt, f32, f32, f32)>,
+        yaw: UnsignedByte,
+        pitch: UnsignedByte
+    },
+    EntityRotation {
+        id: VarInt,
+        on_ground: bool,
+        yaw: UnsignedByte,
+        pitch: UnsignedByte
+    },
+    RemoveEntities {
+        ids: PrefixedArray<VarInt>,
     },
     RotateHead {
-        entity_id: VarInt,
+        id: VarInt,
         head_yaw: UnsignedByte
     },
     EntityMetadata(), // I ain't doin allat
@@ -128,7 +141,7 @@ impl Parse for Payload {
         let id = id.0;
 
         let payload = match (direction, id) {
-            (Serverbound, 1) => Attack { entity_id: VarInt::decode(bytes)? },
+            (Serverbound, 1) => Attack { id: VarInt::decode(bytes)? },
             (Serverbound, 13) => ClientTickEnd(),
             (Serverbound, 28) => KeepServerAlive { id: Long::decode(bytes)? },
             (Serverbound, 30) => PlayerPosition {
@@ -177,20 +190,9 @@ impl Parse for Payload {
                 yaw:            Float::decode(bytes)?,
                 pitch:          Float::decode(bytes)?
             },
-            (Clientbound, 0) => {
-                eprintln!("BUNDLE DELIM PACKET, bytes left: {}", bytes.len());
-                if bytes.is_empty() {
-                    BundleDelimiter()
-                } else {
-                    match parse_bundle(bytes) {
-                        Ok(b) => return Ok(b),
-                        Err(e) => {
-                            eprintln!("parse_bundle failed: {:?}, treating as delimiter", e);
-                            BundleDelimiter()
-                        }
-                    }
-                }
-            },
+            // Bundles are just ordinary length-prefixed packets between two delimiter packets.
+            // Framing is handled by ProtocolParser, so the delimiter itself has no payload.
+            (Clientbound, 0) => BundleDelimiter(),
             (Clientbound, 1) => AddEntity { 
                 id:             VarInt::decode(bytes)?,
                 uuid:           UUID::decode(bytes)?,
@@ -221,16 +223,85 @@ impl Parse for Payload {
             },
             (Clientbound, 13) => ChunkBiomes(),
             (Clientbound, 45) => KeepClientAlive { id: Long::decode(bytes)? },
-            (Clientbound, 54) => EntityPosition {
-                entity_id: VarInt::decode(bytes)?,
-                properties: VarInt::decode(bytes)?
+            (Clientbound, 54) => {
+                let id = VarInt::decode(bytes)?;
+                let (on_ground, step_count) = {
+                    let VarInt(properties) = VarInt::decode(bytes)?;
+                    (properties & 1 == 1, properties >> 1)
+                };
+
+                let steps: Vec<(VarInt, f32, f32, f32)> = if step_count == 0 {
+                    vec![(
+                        VarInt(0),
+                        (Short::decode(bytes)? as f32) / 4096.0,
+                        (Short::decode(bytes)? as f32) / 4096.0,
+                        (Short::decode(bytes)? as f32) / 4096.0,
+                    )]
+                } else {
+                    let mut out = Vec::new();
+                    for _ in 0..step_count {
+                        out.push((
+                            VarInt::decode(bytes)?,
+                            (Short::decode(bytes)? as f32) / 4096.0,
+                            (Short::decode(bytes)? as f32) / 4096.0,
+                            (Short::decode(bytes)? as f32) / 4096.0,
+                        ));
+                    };
+                    out
+                };
+
+                EntityPosition {
+                    id,
+                    on_ground,
+                    steps
+                }
             },
-            (Clientbound, 55) => EntityPositionRotation {
-                entity_id: VarInt::decode(bytes)?,
-                properties: VarInt::decode(bytes)?
+            (Clientbound, 55) => {
+                let id = VarInt::decode(bytes)?;
+                let (on_ground, step_count) = {
+                    let VarInt(properties) = VarInt::decode(bytes)?;
+                    (properties & 1 == 1, properties >> 1)
+                };
+
+                let steps: Vec<(VarInt, f32, f32, f32)> = if step_count == 0 {
+                    vec![(
+                        VarInt(0),
+                        (Short::decode(bytes)? as f32) / 4096.0,
+                        (Short::decode(bytes)? as f32) / 4096.0,
+                        (Short::decode(bytes)? as f32) / 4096.0,
+                    )]
+                } else {
+                    let mut out = Vec::new();
+                    for _ in 0..step_count {
+                        out.push((
+                            VarInt::decode(bytes)?,
+                            (Short::decode(bytes)? as f32) / 4096.0,
+                            (Short::decode(bytes)? as f32) / 4096.0,
+                            (Short::decode(bytes)? as f32) / 4096.0,
+                        ));
+                    };
+                    out
+                };
+
+                EntityPositionRotation {
+                    id,
+                    on_ground,
+                    steps,
+                    yaw: UnsignedByte::decode(bytes)?,
+                    pitch: UnsignedByte::decode(bytes)?
+                }
+            },
+            (Clientbound, 57) => EntityRotation {
+                id: VarInt::decode(bytes)?,
+                on_ground: Bool::decode(bytes)?,
+                yaw: UnsignedByte::decode(bytes)?,
+                pitch: UnsignedByte::decode(bytes)?,
+            },
+            (Clientbound, 78) => RemoveEntities {
+                ids: PrefixedArray::<VarInt>::decode(bytes)?
             },
             (Clientbound, 85) => RotateHead {
-                entity_id: VarInt::decode(bytes)?,
+                id: VarInt::decode(bytes)?,
                 head_yaw: UnsignedByte::decode(bytes)?
             },
             (Clientbound, 101) => EntityMetadata(),

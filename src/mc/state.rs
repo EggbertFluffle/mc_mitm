@@ -3,7 +3,6 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Entity {
-    pub id: i32,
     pub x: f64,
     pub z: f64,
     pub yaw: u8,

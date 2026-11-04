@@ -65,80 +65,212 @@ pub struct Packet {
 #[derive(Debug, Clone, Default)]
 pub struct ProtocolParser {
     pub phase: Phase,
-    pub compression: Option<u32>
+    pub compression: Option<u32>,
+    streams: [Vec<u8>; 2],
+    next_seq: [Option<u32>; 2]
 }
 
 impl ProtocolParser {
-    // parse_packet will return None if the packet was not complete and is expecting more bytes to
-    // complete the packet
-    pub fn parse_packet(&mut self, raw_packet: RawPacket) -> Result<Packet, DecodeError> {
+    pub fn parse_packets(&mut self, raw_packet: RawPacket) -> Vec<Packet> {
         use etherparse::TransportHeader::Tcp;
-        use Phase::*;
         use Direction::{ Serverbound, Clientbound };
 
         // Use etherparse to get packet headers and data start
-        let headers = raw_packet.headers().map_err(|_| { DecodeError::PrematureByteEnd })?;
-        let mut bytes: &[u8] = headers.payload.slice();
-
-        let direction = if let Some(Tcp(tcp_header)) = headers.transport {
-            // TODO: Don't use magic number
-            if tcp_header.destination_port == 25565 { Serverbound } else { Clientbound }
-        } else { panic!("Received packet without TCP headers") };
-
-        let _ = VarInt::decode(&mut bytes)?; // Toss the length, we don't need that jawn
-
-        let mut decompressed = Vec::new();
-
-        let id = if self.compression.is_some() {
-            let VarInt(data_length) = VarInt::decode(&mut bytes)?;
-
-            if data_length == 0 {
-                VarInt::decode(&mut bytes)?
-            } else {
-                let data_length = usize::try_from(data_length)
-                    .map_err(|_| DecodeError::MalformedBytes)?;
-
-                decompressed.resize(data_length, 0);
-
-                let (uncompressed, status) = decompress_slice(
-                    &mut decompressed,
-                    bytes,
-                    InflateConfig::default()
-                );
-
-                if status != zlib_rs::ReturnCode::Ok || uncompressed.len() != data_length {
-                    return Err(DecodeError::MalformedBytes);
-                }
-
-                let len = uncompressed.len();
-                decompressed.truncate(len);
-                bytes = &decompressed;
-
-                VarInt::decode(&mut bytes)?
-            }
-        } else {
-            VarInt::decode(&mut bytes)?
+        let headers = match raw_packet.headers() {
+            Ok(headers) => headers,
+            Err(_) => return Vec::new()
         };
 
-        let packet = Packet { 
+        let tcp_header = if let Some(Tcp(tcp_header)) = headers.transport {
+            tcp_header
+        } else {
+            return Vec::new();
+        };
+
+        // TODO: Don't use magic number
+        let direction = if tcp_header.destination_port == 25565 { Serverbound } else { Clientbound };
+
+        // A new or reset connection invalidates any partially buffered packet.
+        if tcp_header.syn || tcp_header.rst {
+            let index = Self::stream_index(direction);
+            self.streams[index].clear();
+            self.next_seq[index] = if tcp_header.syn {
+                Some(tcp_header.sequence_number.wrapping_add(1))
+            } else {
+                None
+            };
+
+            return Vec::new();
+        }
+
+        let bytes = headers.payload.slice();
+        if bytes.is_empty() {
+            return Vec::new();
+        }
+
+        self.push_segment(direction, tcp_header.sequence_number, bytes)
+    }
+
+    fn push_segment(&mut self, direction: Direction, sequence: u32, bytes: &[u8]) -> Vec<Packet> {
+        let index = Self::stream_index(direction);
+        let length = bytes.len() as u32;
+
+        let skip = match self.next_seq[index] {
+            None => {
+                self.next_seq[index] = Some(sequence.wrapping_add(length));
+                0
+            }
+            Some(expected) => {
+                let difference = sequence.wrapping_sub(expected);
+
+                if difference == 0 {
+                    self.next_seq[index] = Some(expected.wrapping_add(length));
+                    0
+                } else if difference < 0x8000_0000 {
+                    // drop a partial packet and resume at the start of this segment
+                    self.streams[index].clear();
+                    self.next_seq[index] = Some(sequence.wrapping_add(length));
+                    0
+                } else {
+                    // Behind where we expected to be: retransmission or duplicate.
+                    let overlap = expected.wrapping_sub(sequence);
+                    if overlap >= length {
+                        return Vec::new();
+                    }
+
+                    self.next_seq[index] = Some(expected.wrapping_add(length - overlap));
+                    overlap as usize
+                }
+            }
+        };
+
+        self.streams[index].extend_from_slice(&bytes[skip..]);
+        self.drain_stream(direction)
+    }
+
+    fn stream_index(direction: Direction) -> usize {
+        match direction {
+            Direction::Serverbound => 0,
+            Direction::Clientbound => 1
+        }
+    }
+
+    // Peek a VarInt without consuming it. Ok(None) means more bytes are needed.
+    fn peek_varint(bytes: &[u8]) -> Result<Option<(VarInt, usize)>, DecodeError> {
+        let mut remaining = bytes;
+
+        match VarInt::decode(&mut remaining) {
+            Ok(value) => Ok(Some((value, bytes.len() - remaining.len()))),
+            Err(DecodeError::PrematureByteEnd) => Ok(None),
+            Err(error) => Err(error)
+        }
+    }
+
+    fn drain_stream(&mut self, direction: Direction) -> Vec<Packet> {
+        let index = Self::stream_index(direction);
+        let mut packets = Vec::new();
+
+        loop {
+            let (length, length_bytes) = match Self::peek_varint(&self.streams[index]) {
+                Ok(Some(value)) => value,
+                Ok(None) => break,
+                Err(_) => {
+                    self.streams[index].clear();
+                    break;
+                }
+            };
+
+            let length = match usize::try_from(length.0) {
+                Ok(length) => length,
+                Err(_) => {
+                    self.streams[index].clear();
+                    break;
+                }
+            };
+
+            let total = match length_bytes.checked_add(length) {
+                Some(total) => total,
+                None => {
+                    self.streams[index].clear();
+                    break;
+                }
+            };
+
+            if self.streams[index].len() < total {
+                break;
+            }
+
+            let frame = self.streams[index][length_bytes..total].to_vec();
+            self.streams[index].drain(..total);
+
+            if let Some(packet) = self.parse_frame(direction, &frame) {
+                packets.push(packet);
+            }
+        }
+
+        packets
+    }
+
+    fn decode_frame(&self, frame: &[u8]) -> Result<Vec<u8>, DecodeError> {
+        if self.compression.is_none() {
+            return Ok(frame.to_vec());
+        }
+
+        let mut compressed = frame;
+        let VarInt(data_length) = VarInt::decode(&mut compressed)?;
+
+        if data_length == 0 {
+            return Ok(compressed.to_vec());
+        }
+
+        let data_length = usize::try_from(data_length)
+            .map_err(|_| DecodeError::MalformedBytes)?;
+
+        let mut decompressed = vec![0; data_length];
+
+        let (uncompressed, status) = decompress_slice(
+            &mut decompressed,
+            compressed,
+            InflateConfig::default()
+        );
+
+        if status != zlib_rs::ReturnCode::Ok || uncompressed.len() != data_length {
+            return Err(DecodeError::MalformedBytes);
+        }
+
+        let len = uncompressed.len();
+        decompressed.truncate(len);
+
+        Ok(decompressed)
+    }
+
+    fn parse_frame(&mut self, direction: Direction, frame: &[u8]) -> Option<Packet> {
+        use Phase::*;
+
+        let data = self.decode_frame(frame).ok()?;
+        let mut bytes: &[u8] = &data;
+
+        let id = VarInt::decode(&mut bytes).ok()?;
+
+        let packet = Packet {
             id,
-            direction, 
+            direction,
             phase: self.phase,
             payload: match self.phase {
-                Handshake => handshake::Payload::parse(&mut bytes, direction, id)?,
-                Status => status::Payload::parse(&mut bytes, direction, id)?,
-                Login => login::Payload::parse(&mut bytes, direction, id)?,
-                Configuration => configuration::Payload::parse(&mut bytes, direction, id)?,
-                Play => play::Payload::parse(&mut bytes, direction, id)?
-            }
+                Handshake => handshake::Payload::parse(&mut bytes, direction, id),
+                Status => status::Payload::parse(&mut bytes, direction, id),
+                Login => login::Payload::parse(&mut bytes, direction, id),
+                Configuration => configuration::Payload::parse(&mut bytes, direction, id),
+                Play => play::Payload::parse(&mut bytes, direction, id)
+            }.ok()?
         };
 
-        if let Some(payload) = &packet.payload.get(0) {
+        if let Some(payload) = packet.payload.first() {
             self.phase = match payload {
                 PhasePayload::Handshake(handshake::Payload::Intention { intent, .. }) => match intent.0 {
                     1 => Status,
                     2..=3 => Login,
-                    _ => Err(DecodeError::MalformedBytes)?
+                    _ => return None
                 },
                 PhasePayload::Status(status::Payload::PingResponse { .. }) => Handshake,
                 PhasePayload::Login(login::Payload::LoginAcknowledged { .. }) => Configuration,
@@ -146,21 +278,19 @@ impl ProtocolParser {
                 _ => self.phase
             };
 
-            return match payload {
+            match payload {
                 PhasePayload::Login(login::Payload::EncryptionRequest())
                     => panic!("Encryption is not supported"),
                 PhasePayload::Login(login::Payload::EncryptionResponse())
                     => panic!("Encryption is not supported"),
                 PhasePayload::Login(login::Payload::SetCompression { threshold }) => {
                     self.compression = if threshold.0 >= 0 { Some(threshold.0 as u32) } else { None };
-
-                    Ok(packet)
                 }
-                _ => Ok(packet)
-            };
+                _ => { }
+            }
         }
-        
-        Ok(packet)
+
+        Some(packet)
     }
 }
 
@@ -217,8 +347,8 @@ impl Bridge {
             .open()
             .expect("Unable to open device for capturing");
 
-        let filter = format!("tcp port 25565 and tcp[tcpflags] & tcp-push != 0");
-        cap.filter(&filter, true)
+        let filter = "tcp port 25565";
+        cap.filter(filter, true)
             .expect("Failed to parse pcap filter");
 
         for raw_packet in cap.iter(Codec) {
@@ -227,13 +357,10 @@ impl Bridge {
                 Ok(rp) => rp
             };
 
-            match self.protocol_parser.parse_packet(raw_packet) {
-                Ok(packet) => {
-                    for payload in &packet.payload {
-                        self.change_state(payload);
-                    }
-                },
-                _ => { }
+            for packet in self.protocol_parser.parse_packets(raw_packet) {
+                for payload in &packet.payload {
+                    self.change_state(payload);
+                }
             }
         }
     }
@@ -255,24 +382,52 @@ impl Bridge {
                 game_state.player.z = *z;
             },
             PlayerRotation { yaw, .. } => {
-                game_state.player.yaw = *yaw;
+                game_state.player.yaw = *yaw % 360.0;
             },
             PlayerPositionRotation { x, z, yaw, .. } => {
                 game_state.player.x = *x;
                 game_state.player.z = *z;
-                game_state.player.yaw = *yaw;
+                game_state.player.yaw = *yaw % 360.0;
             },
             AddEntity { id, entity_type, x, z, yaw, .. } => {
-                println!("Add entity packet found");
                 game_state.entities.entry(id.0)
                     .or_insert(Entity {
-                        id: id.0,
                         x: *x,
                         z: *z,
                         yaw: *yaw,
                         entity_type: entity_type.0
                     });
             },
+            EntityPosition { id, steps, .. } => {
+                game_state.entities.entry(id.0)
+                    .and_modify(|entity| {
+                        for s in steps {
+                            entity.x += s.1 as f64;
+                            entity.z += s.3 as f64;
+                        }
+                    });
+            },
+            EntityPositionRotation { id, steps, yaw, .. } => {
+                game_state.entities.entry(id.0)
+                    .and_modify(|entity| {
+                        for s in steps {
+                            entity.x += s.1 as f64;
+                            entity.z += s.3 as f64;
+                        }
+                        entity.yaw = *yaw;
+                    });
+            },
+            EntityRotation { id, yaw, .. } => {
+                game_state.entities.entry(id.0)
+                    .and_modify(|entity| {
+                        entity.yaw = *yaw;
+                    });
+            },
+            RemoveEntities { ids } => {
+                for ele in ids {
+                    _ = game_state.entities.remove(&ele.0);
+                }
+            }
             _ => { }
         };
     }
