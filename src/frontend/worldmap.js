@@ -5,16 +5,16 @@ const playerCoords = document.getElementById('player-coords');
 
 function loadMarkerImage(file) {
     const img = new Image();
-    img.src = `images/${file}`;
+    img.src = `images/${file}.png`;
     return img;
 }
 
 // Human-readable mob type -> image used for its map marker.
 const markerImages = {
-    player: loadMarkerImage('steve.jpg'),
-    pig: loadMarkerImage('pig.jpg'),
-    sheep: loadMarkerImage('sheep.jpg'),
-    cow: loadMarkerImage('cow.jpg')
+    player: loadMarkerImage('steve'),
+    pig: loadMarkerImage('pig'),
+    sheep: loadMarkerImage('sheep'),
+    cow: loadMarkerImage('cow')
 };
 
 const mobTypes = Object.keys(markerImages).filter((type) => type !== 'player');
