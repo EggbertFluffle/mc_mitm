@@ -35,7 +35,6 @@ async fn game_state(
 
     let clone = state.clone();
     state.action_log.clear();
-    state.entities_log.clear();
 
     Json(clone)
 }

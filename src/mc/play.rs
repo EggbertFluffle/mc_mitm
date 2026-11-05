@@ -6,7 +6,12 @@ use crate::mc::types::*;
 pub enum Payload {
     // Serverbound
     Attack { id: VarInt },
+    Chat {
+        message: String,
+        timestamp: Long
+    },
     ClientTickEnd(),
+    CloseContainer { id: VarInt },
     KeepServerAlive { id: Long },
     PlayerPosition {
         x: Double,
@@ -35,8 +40,17 @@ pub enum Payload {
     },
     PlayerLoaded(),
     Punch(),
+    RenameItem { name: String },
     SetHeldItem {
         slot: Short
+    },
+    UpdateSign {
+        location: Position,
+        line1: String,
+        line2: String,
+        line3: String,
+        line4: String,
+        slot: VarInt
     },
     UseItemOn {
         hand: VarInt,
@@ -158,7 +172,12 @@ impl Parse for Payload {
 
         let payload = match (direction, id) {
             (Serverbound, 1) => Attack { id: VarInt::decode(bytes)? },
+            (Serverbound, 9) => Chat {
+                message:        String::decode(bytes)?,
+                timestamp:      Long::decode(bytes)?
+            },
             (Serverbound, 13) => ClientTickEnd(),
+            (Serverbound, 19) => CloseContainer{ id: VarInt::decode(bytes)? },
             (Serverbound, 28) => KeepServerAlive { id: Long::decode(bytes)? },
             (Serverbound, 30) => PlayerPosition {
                 x:              Double::decode(bytes)?,
@@ -188,7 +207,16 @@ impl Parse for Payload {
             (Serverbound, 44) => Punch(),
             // Why does the protocol skip 45?
             (Serverbound, 46) => Punch(),
+            (Serverbound, 49) => RenameItem { name: String::decode(bytes)? },
             (Serverbound, 54) => SetHeldItem { slot: Short::decode(bytes)? },
+            (Serverbound, 62) => UpdateSign {
+                location:       Position::decode(bytes)?,
+                line1:          String::decode(bytes)?,
+                line2:          String::decode(bytes)?,
+                line3:          String::decode(bytes)?,
+                line4:          String::decode(bytes)?,
+                slot:           VarInt::decode(bytes)?
+            },
             (Serverbound, 66) => UseItemOn { 
                 hand:           VarInt::decode(bytes)?,
                 location:       Position::decode(bytes)?,

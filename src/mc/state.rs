@@ -22,5 +22,4 @@ pub struct GameState {
     pub entities: HashMap<i32, Entity>,
     pub timestamp: i64,
     pub action_log: Vec<String>,
-    pub entities_log: Vec<String>
 }

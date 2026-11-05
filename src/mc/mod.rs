@@ -108,6 +108,7 @@ impl ProtocolParser {
             return Vec::new();
         }
 
+        eprintln!("SEGMENT: dir={:?} syn={} rst={} len={}", direction, tcp_header.syn, tcp_header.rst, bytes.len());
         self.push_segment(direction, tcp_header.sequence_number, bytes)
     }
 
@@ -204,7 +205,10 @@ impl ProtocolParser {
             self.streams[index].drain(..total);
 
             if let Some(packet) = self.parse_frame(direction, &frame) {
+                eprintln!("GOT PACKET: phase={:?} dir={:?} id={} payloads={}", packet.phase, packet.direction, packet.id.0, packet.payload.len());
                 packets.push(packet);
+            } else {
+                eprintln!("PARSE_FRAME_RETURNED_NONE for frame of len {}", frame.len());
             }
         }
 
@@ -252,17 +256,25 @@ impl ProtocolParser {
 
         let id = VarInt::decode(&mut bytes).ok()?;
 
+        let payload_res = match self.phase {
+            Handshake => handshake::Payload::parse(&mut bytes, direction, id),
+            Status => status::Payload::parse(&mut bytes, direction, id),
+            Login => login::Payload::parse(&mut bytes, direction, id),
+            Configuration => configuration::Payload::parse(&mut bytes, direction, id),
+            Play => play::Payload::parse(&mut bytes, direction, id)
+        };
+        let payload = match payload_res {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("PAYLOAD_PARSE_ERR: phase={:?} dir={:?} id={} err={:?} bytes_left={}", self.phase, direction, id.0, e, bytes.len());
+                return None;
+            }
+        };
         let packet = Packet {
             id,
             direction,
             phase: self.phase,
-            payload: match self.phase {
-                Handshake => handshake::Payload::parse(&mut bytes, direction, id),
-                Status => status::Payload::parse(&mut bytes, direction, id),
-                Login => login::Payload::parse(&mut bytes, direction, id),
-                Configuration => configuration::Payload::parse(&mut bytes, direction, id),
-                Play => play::Payload::parse(&mut bytes, direction, id)
-            }.ok()?
+            payload,
         };
 
         if let Some(payload) = packet.payload.first() {
@@ -439,6 +451,9 @@ impl Bridge {
                     "Player has opened up a {}",
                     match window_type.0 {
                         2   => "chest",
+                        5   => "double chest",
+                        6   => "dispenser",
+                        7   => "crafter",
                         8   => "anvil",
                         9   => "beacon",
                         10  => "blast_furnace",
@@ -460,14 +475,20 @@ impl Bridge {
                     }
                 ));
             },
-            CombatEnd() => {
-                game_state.action_log.push("Player has left combat".to_string());
+            CombatDeath { .. } => {
+                game_state.action_log.push("Player died".to_string());
             },
-            CombatStart() => {
-                game_state.action_log.push("Player has entered combat".to_string());
+            Chat { message, .. } => {
+                game_state.action_log.push(format!("Sent chat: \"{}\"", message.as_str()));
             },
-            CombatDeath { message, .. } => {
-                game_state.action_log.push(message.clone());
+            CloseContainer { .. } => {
+                game_state.action_log.push("Closed contianer".to_string());
+            },
+            RenameItem { name } => {
+                game_state.action_log.push(format!("Renamed item: \"{}\"", name.as_str()));
+            },
+            UpdateSign { line1, line2, line3, line4, ..} => {
+                game_state.action_log.push( format!( "Updated sign: \"{}\", \"{}\", \"{}\", \"{}\"", line1.as_str(), line2.as_str(), line3.as_str(), line4.as_str()));
             },
             _ => { }
         };

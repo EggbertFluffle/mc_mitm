@@ -5,7 +5,6 @@ const cursorCoords = document.getElementById('cursor-coords');
 const playerCoords = document.getElementById('player-coords');
 
 const actionLog = document.getElementById('action-log');
-const entityLog = document.getElementById('entity-log');
 
 function loadMarkerImage(file) {
     const img = new Image();
@@ -62,9 +61,6 @@ const colors = {
 };
 
 const mapSettings = {
-    padding: 200,
-    minWidth: 400,
-    maxWidth: 960,
     // How many pixels one unit of distance spans.
     maxScale: 160,
     // The map represents values up to this number.
@@ -268,14 +264,19 @@ const canvasInstance = function(seed) {
     }
 
     function resize() {
-        element.width = Math.min(
-            mapSettings.maxWidth,
-            Math.max(mapSettings.minWidth, window.innerWidth - mapSettings.padding * 2)
-        );
-        element.height = Math.max(
-            300, 
-            window.innerHeight - element.offsetTop - mapSettings.padding
-        );
+        const width = Math.max(1, element.clientWidth);
+        const height = Math.max(1, element.clientHeight);
+
+        if (element.width === width && element.height === height)
+            return;
+
+        element.width = width;
+        element.height = height;
+
+        const minScale = (element.width / 2) / mapSettings.maxRange;
+        if (scale < minScale)
+            scale = minScale;
+
         draw();
     }
 
@@ -313,7 +314,8 @@ const canvasInstance = function(seed) {
         } catch {}
     }
 
-    window.addEventListener('resize', resize);
+    const resizeObserver = new ResizeObserver(() => resize());
+    resizeObserver.observe(element);
 
     element.addEventListener('wheel', (event) => {
         event.preventDefault();
@@ -458,19 +460,27 @@ function syncMobs(entities) {
 }
 
 function logActions(actions_log) {
-	for(let a of actions_log) {
+	if (!actionLog || !Array.isArray(actions_log) || actions_log.length === 0)
+		return;
+
+	// All actions in one poll arrived together, so they share a timestamp.
+	const receivedAt = new Date();
+	const receivedTime = receivedAt.toLocaleTimeString([], { hour12: false });
+
+	for (let a of actions_log) {
 		const log = document.createElement("p");
-		log.innerText = a;
+		log.className = "log-entry";
+
+		const time = document.createElement("time");
+		time.dateTime = receivedAt.toISOString();
+		time.textContent = `[${receivedTime}]`;
+
+		log.append(time, document.createTextNode(String(a)));
 		actionLog.appendChild(log);
 	}
-}
 
-function logEntities(entities_log) {
-	for(let e of entities_log) {
-		const log = document.createElement("p");
-		log.innerText = e;
-		entityLog.appendChild(log);
-	}
+	// New entries appear at the bottom; keep the newest one in view.
+	actionLog.scrollTop = actionLog.scrollHeight;
 }
 
 // Poll the game-state API on a fixed interval and move the player marker.
@@ -485,7 +495,6 @@ async function pollGameState() {
         );
         syncMobs(state.entities);
 
-		logEntities(state.entities_log);
 		logActions(state.action_log);
 
         // Keep the viewport locked onto the player while follow mode is on.
