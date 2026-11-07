@@ -12,30 +12,26 @@ function loadMarkerImage(file) {
     return img;
 }
 
-// Human-readable mob type -> image used for its map marker.
+const idsByName = await (async () => {
+    const res = await fetch('./entities.json');
+    if (!res.ok)
+        throw new Error(`Couldn't fetch entities.json: ${res.status}`);
+
+    return res.json();
+})();
+
 const markerImages = {
     player: loadMarkerImage('steve'),
-    cow: loadMarkerImage('cow'),
-    pig: loadMarkerImage('pig'),
-    sheep: loadMarkerImage('sheep'),
-    skeleton: loadMarkerImage('skeleton'),
-    spider: loadMarkerImage('spider'),
-    villager: loadMarkerImage('villager'),
-    wolf: loadMarkerImage('wolf'),
-    zombie: loadMarkerImage('zombie'),
+    ...Object.fromEntries(
+        Object.keys(idsByName).map((name) => [name, loadMarkerImage(name)])
+    )
 };
 
-const mobTypes = Object.keys(markerImages).filter((type) => type !== 'player');
+const mobTypes = Object.keys(idsByName)
 
-// Reverse of entities.json: numeric entity_type -> marker type name.
-const ENTITY_TYPES_BY_ID = await (async () => {
-    const res = await fetch('./entities.json');
-    if (!res.ok) throw new Error(`entities.json failed: ${res.status}`);
-    const idsByName = await res.json();
-    return Object.fromEntries(
-        Object.entries(idsByName).map(([name, id]) => [String(id), name])
-    );
-})();
+const ENTITY_TYPES_BY_ID = Object.fromEntries(
+    Object.entries(idsByName).map(([name, id]) => [String(id), name])
+);
 
 // World positions of everything drawn on top of the grid.
 const markers = {
@@ -57,7 +53,9 @@ const colors = {
     crosshair: "red",
     playerArrow: "#ff5555",
     labels: "white",
-    axes: "#ddc7be"
+    axes: "#ddc7be",
+    // Fallback marker for mob types with no matching image.
+    unknownMob: "white"
 };
 
 const mapSettings = {
@@ -89,7 +87,7 @@ const canvasInstance = function(seed) {
     let startOffX = 0;
     let startOffY = 0;
 
-    const biomeLayer = createBiomeLayer(seed, () => draw());
+    const biomeLayer = seed ? createBiomeLayer(seed, () => draw()) : null;
 
     function draw() {
         ctx.clearRect(0, 0, element.width, element.height);
@@ -98,8 +96,10 @@ const canvasInstance = function(seed) {
         const oy = Math.round(element.height / 2 + offY);
 
         const view = { width: element.width, height: element.height, ox: ox, oy: oy, scale: scale };
-        biomeLayer.draw(ctx, view);
-        biomeLayer.update(view);
+        if (biomeLayer) {
+            biomeLayer.draw(ctx, view);
+            biomeLayer.update(view);
+        }
 
         ctx.strokeStyle = colors.gridStroke;
         ctx.lineWidth = 1;
@@ -173,8 +173,8 @@ const canvasInstance = function(seed) {
             ctx.fillText(String(-k * step), ox - 4, py + offset);
         }
 
-        // Axis letters and compass labels (chunkbase standard:
-        // -x west, +x east, -z north, +z south).
+        // Axis letters and compass labels 
+        // (-x west, +x east, -z north, +z south).
         ctx.font = 'bold 12px monospace';
         ctx.fillText('X', element.width - 14, oy - 18);
         ctx.fillText('Z', ox - 14, element.height - 18);
@@ -200,8 +200,6 @@ const canvasInstance = function(seed) {
         // screen x grows right (east), world z grows down (south).
         function drawMarker(type, coords, size) {
             const img = markerImages[type];
-            if (!img.complete || img.naturalWidth === 0)
-                return;
 
             const px = ox + coords.x * scale;
             const py = oy + coords.y * scale;
@@ -209,6 +207,20 @@ const canvasInstance = function(seed) {
             // Skip markers outside the viewport (plus a marker of margin).
             if (px < -size || px > element.width + size ||
                 py < -size || py > element.height + size)
+                return;
+
+            // Unknown mob type
+            if (!img || (img.complete && img.naturalWidth === 0)) {
+                ctx.fillStyle = colors.unknownMob;
+                ctx.fillRect(px - size / 2, py - size / 2, size, size);
+                ctx.strokeStyle = colors.border;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(px - size / 2, py - size / 2, size, size);
+                return;
+            }
+
+            // Image exists but hasn't finished decoding yet.
+            if (!img.complete)
                 return;
 
             ctx.drawImage(img, px - size / 2, py - size / 2, size, size);
@@ -223,9 +235,7 @@ const canvasInstance = function(seed) {
         // Draw the player last so it sits on top of any overlapping mobs.
         drawMarker('player', markers.player, PLAYER_MARKER_SIZE);
 
-        // Heading arrow: yaw 0 is south (+z, screen-down), 90 is west
-        // (-x, screen-left), increasing clockwise. Rotating the screen-down
-        // vector (0, 1) clockwise in canvas space reproduces that exactly.
+        // Heading/Yaw arrow
         function drawPlayerYawArrow() {
             const px = ox + markers.player.x * scale;
             const py = oy + markers.player.y * scale;
@@ -409,6 +419,7 @@ function setPlayerPosition(x, z, yaw) {
     canvas.draw();
 }
 
+// Test function.
 // Populate the map with a random assortment of mobs in random positions
 // near the origin, replacing any previously spawned mobs.
 function populateMobs(count = 12, maxRadius = 32) {
@@ -441,12 +452,12 @@ function syncMobs(entities) {
             delete markers.mobs[id];
 
     for (const [id, entity] of Object.entries(entities)) {
-        const type = ENTITY_TYPES_BY_ID[entity.entity_type];
-
         // entity_type has no entry in entities.json (e.g. a new mob type).
+        // Keep the mob anyway; drawMarker() falls back to a white square.
+        let type = ENTITY_TYPES_BY_ID[entity.entity_type];
         if (!type) {
             console.warn(`Unknown entity_type ${entity.entity_type} for entity ${id}`);
-            continue;
+            type = 'unknown';
         }
 
         markers.mobs[id] = {

@@ -1,10 +1,20 @@
 {
+    "bat": 10,
+    "bee": 11,
+    "cat": 21,
+    "chicken": 26,
     "cow": 30,
+    "creeper": 32,
+    "dolphin": 36,
+    "iron-golem": 71,
     "pig": 101,
+    "rabbit": 111,
     "sheep": 114,
     "skeleton": 118,
     "spider": 127,
+    "squid": 130,
     "villager": 143,
+    "warden": 146,
     "wolf": 152,
     "zombie": 154
 }

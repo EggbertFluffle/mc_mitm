@@ -87,8 +87,7 @@ impl ProtocolParser {
             return Vec::new();
         };
 
-        // TODO: Don't use magic number
-        let direction = if tcp_header.destination_port == 25565 { Serverbound } else { Clientbound };
+        let direction = if tcp_header.destination_port == crate::SERVER_PORT { Serverbound } else { Clientbound };
 
         // A new or reset connection invalidates any partially buffered packet.
         if tcp_header.syn || tcp_header.rst {
@@ -359,8 +358,8 @@ impl Bridge {
             .open()
             .expect("Unable to open device for capturing");
 
-        let filter = "tcp port 25565";
-        cap.filter(filter, true)
+        let filter = format!("tcp port {}", crate::SERVER_PORT);
+        cap.filter(&filter, true)
             .expect("Failed to parse pcap filter");
 
         for raw_packet in cap.iter(Codec) {
