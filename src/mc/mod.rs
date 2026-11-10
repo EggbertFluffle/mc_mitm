@@ -107,7 +107,6 @@ impl ProtocolParser {
             return Vec::new();
         }
 
-        eprintln!("SEGMENT: dir={:?} syn={} rst={} len={}", direction, tcp_header.syn, tcp_header.rst, bytes.len());
         self.push_segment(direction, tcp_header.sequence_number, bytes)
     }
 
@@ -204,10 +203,7 @@ impl ProtocolParser {
             self.streams[index].drain(..total);
 
             if let Some(packet) = self.parse_frame(direction, &frame) {
-                eprintln!("GOT PACKET: phase={:?} dir={:?} id={} payloads={}", packet.phase, packet.direction, packet.id.0, packet.payload.len());
                 packets.push(packet);
-            } else {
-                eprintln!("PARSE_FRAME_RETURNED_NONE for frame of len {}", frame.len());
             }
         }
 
@@ -262,13 +258,12 @@ impl ProtocolParser {
             Configuration => configuration::Payload::parse(&mut bytes, direction, id),
             Play => play::Payload::parse(&mut bytes, direction, id)
         };
+
         let payload = match payload_res {
             Ok(p) => p,
-            Err(e) => {
-                eprintln!("PAYLOAD_PARSE_ERR: phase={:?} dir={:?} id={} err={:?} bytes_left={}", self.phase, direction, id.0, e, bytes.len());
-                return None;
-            }
+            Err(_) => { return None; }
         };
+
         let packet = Packet {
             id,
             direction,
@@ -346,9 +341,7 @@ impl Bridge {
     }
 
     pub fn run(&mut self) {
-        let device = Device::lookup()
-            .expect("No device available")
-            .expect("No suitable devices present");
+        let device = Device::from("lo");
         println!("Using device: {}", device.name);
 
         let mut cap = Capture::from_device(device)

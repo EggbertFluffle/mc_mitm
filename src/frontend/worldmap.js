@@ -211,11 +211,9 @@ const canvasInstance = function(seed) {
 
             // Unknown mob type
             if (!img || (img.complete && img.naturalWidth === 0)) {
+				size /= 2;
                 ctx.fillStyle = colors.unknownMob;
                 ctx.fillRect(px - size / 2, py - size / 2, size, size);
-                ctx.strokeStyle = colors.border;
-                ctx.lineWidth = 1;
-                ctx.strokeRect(px - size / 2, py - size / 2, size, size);
                 return;
             }
 
@@ -224,9 +222,6 @@ const canvasInstance = function(seed) {
                 return;
 
             ctx.drawImage(img, px - size / 2, py - size / 2, size, size);
-            ctx.strokeStyle = colors.border;
-            ctx.lineWidth = 1;
-            ctx.strokeRect(px - size / 2, py - size / 2, size, size);
         }
 
         for (const mob of Object.values(markers.mobs))
