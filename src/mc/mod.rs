@@ -341,7 +341,9 @@ impl Bridge {
     }
 
     pub fn run(&mut self) {
-        let device = Device::from("lo");
+        let device = Device::lookup()
+            .expect("Error opening default device")
+            .expect("No viable devices exist");
         println!("Using device: {}", device.name);
 
         let mut cap = Capture::from_device(device)
