@@ -15,7 +15,14 @@ We support many features in the tool, such as:
 - Live top-down map of the game world, including player and game entity positions
 - Handling of communications compressed with `zlib`
 
+## Non-features
+
 Some things are not included in the project, such as:
 - Support for decryption of encrypted communications with servers using `online-mode` (the default)
 - Dynamic seed retrieval for drawing biome boundaries
 - Storing chunk data for reference in packets that require context from block coordinates
+
+## Gallery
+
+![attacker ui](report/attacker.png)
+![client view](report/client.png)
