@@ -5,9 +5,9 @@ By: Harrison DiAmbrosio
 
 A tool designed to be used with a MITM utility in order to build context for client connections to Minecraft: Java Edition servers. The tool utilized `pcap` to capture packets over a network interface, parse the data according to the community documented protocol spec and build game context overtime presented to the attacker via a web UI. 
 
-The project is further detailed in the submission report, found [here](https://github.com/EggbertFluffle/mc_mitm/blob/main/reports/CS513_Minecraft_MITM.pdf).
+The project is further detailed in the submission report, found [here](https://github.com/EggbertFluffle/mc_mitm/blob/main/report/CS513_Minecraft_MITM.pdf).
 
-== Features
+## Features
 
 We support many features in the tool, such as:
 
